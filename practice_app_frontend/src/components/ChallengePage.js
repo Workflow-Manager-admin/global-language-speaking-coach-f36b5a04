@@ -6,12 +6,31 @@ import AccuracySidebar from "./AccuracySidebar";
 import "../App.css";
 
 // PUBLIC_INTERFACE
+/**
+ * ChallengePage uses selectedLanguage for both TTS and SR (no hardcoded language).
+ */
 function ChallengePage() {
   const { levelId } = useParams();
-  const { levels, markLevelTestScore, nextAvailableLevel } = useProgress();
+  const { levels, markLevelTestScore, nextAvailableLevel, selectedLanguage } = useProgress();
   const levelIdx = levels.findIndex(l => String(l.level) === String(levelId));
   const level = levels[levelIdx];
   const navigate = useNavigate();
+
+  // Build language code for BCP47 for speech APIs
+  const languageBCP47Map = {
+    en: "en-US",
+    es: "es-ES",
+    fr: "fr-FR",
+    de: "de-DE",
+    zh: "zh-CN",
+    ja: "ja-JP",
+    ar: "ar-SA",
+    ru: "ru-RU",
+    ko: "ko-KR",
+    pt: "pt-PT"
+  };
+  const languageCode = (selectedLanguage?.code || "en");
+  const speechLang = languageBCP47Map[languageCode] || languageCode;
 
   // For multi-word sequential challenge
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -26,7 +45,7 @@ function ChallengePage() {
     startListening,
     stopListening,
     supported
-  } = useSpeechRecognition();
+  } = useSpeechRecognition(speechLang);
 
   const ttsUtterRef = useRef(null);
   const [ttsPlaying, setTtsPlaying] = useState(false);
@@ -59,29 +78,28 @@ function ChallengePage() {
   const handleSpeakPrompt = () => {
     const prompt = level.words[currentIdx];
     if (window.speechSynthesis && prompt) {
-      try { window.speechSynthesis.cancel(); } catch { }
-      // Use selected language if set
-      let selectedLangObj =
-        window.localStorage.getItem("selectedLanguage") &&
-        JSON.parse(window.localStorage.getItem("selectedLanguage"));
-      let defaultLang = (selectedLangObj && selectedLangObj.code) || "en";
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
       const voices = window.speechSynthesis.getVoices() || [];
       // Prefer Google-branded voice for language
-      let v = voices.find(
-        vo =>
-          vo.lang &&
-          vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase()) &&
-          (vo.name && /google/i.test(vo.name) || vo.voiceURI && /google/i.test(vo.voiceURI))
-      );
-      // Native fallback matching language
-      if (!v) {
-        v = voices.find(
-          vo => vo.lang && vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase())
+      let v =
+        voices.find(
+          vo =>
+            vo.lang &&
+            vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) &&
+            ((vo.name && /google/i.test(vo.name)) ||
+              (vo.voiceURI && /google/i.test(vo.voiceURI)))
+        ) ||
+        voices.find(
+          vo =>
+            vo.lang &&
+            (vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) ||
+              vo.lang.toLowerCase() === speechLang.toLowerCase())
         );
-      }
       if (!v && voices.length > 0) v = voices[0];
       const utt = new window.SpeechSynthesisUtterance(prompt);
-      utt.lang = v?.lang || defaultLang;
+      utt.lang = v?.lang || speechLang;
       utt.rate = 1;
       utt.pitch = 1.15;
       if (v) utt.voice = v;
@@ -95,17 +113,27 @@ function ChallengePage() {
   // Calculate similarity function
   function calcScore(expected, userSpoken) {
     if (!expected || !userSpoken) return 0;
-    let a = expected.trim().toLowerCase(), b = userSpoken.trim().toLowerCase();
+    let a = expected.trim().toLowerCase(),
+      b = userSpoken.trim().toLowerCase();
     // Levenshtein, same as sidebar
-    const sa = a, sb = b;
-    const matrix = Array(sb.length + 1).fill(null).map(() => []);
-    for (let i = 0; i <= sb.length; i++) { matrix[i][0] = i; }
-    for (let j = 0; j <= sa.length; j++) { matrix[0][j] = j; }
+    const sa = a,
+      sb = b;
+    const matrix = Array(sb.length + 1)
+      .fill(null)
+      .map(() => []);
+    for (let i = 0; i <= sb.length; i++) {
+      matrix[i][0] = i;
+    }
+    for (let j = 0; j <= sa.length; j++) {
+      matrix[0][j] = j;
+    }
     for (let i = 1; i <= sb.length; i++) {
       for (let j = 1; j <= sa.length; j++) {
         const cost = sa[j - 1] === sb[i - 1] ? 0 : 1;
         matrix[i][j] = Math.min(
-          matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost
+          matrix[i - 1][j] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j - 1] + cost
         );
       }
     }

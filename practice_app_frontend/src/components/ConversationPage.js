@@ -6,57 +6,83 @@ import AccuracySidebar from "./AccuracySidebar";
 import "../App.css";
 
 // PUBLIC_INTERFACE
+/**
+ * ConversationPage component uses selectedLanguage from ProgressContext
+ * for both speech recognition and synthesis. All AI pronunciation/synthesis
+ * and voice-to-text will reflect the user's selected language code.
+ */
 function ConversationPage() {
   const { levelId } = useParams();
-  const { lessons } = useProgress();
+  const { lessons, selectedLanguage } = useProgress();
   const navigate = useNavigate();
 
   const lesson = lessons.find(l => String(l.level) === String(levelId));
+  // Derive language code for use in all TTS and SR; fallback to English.
+  const languageCode =
+    selectedLanguage?.code ||
+    "en"; // fallback for safety—should always be set after selection
+
+  // Try matching to BCP47 for speech recognition and synth APIs
+  // Some APIs need regional variant: e.g. en-US, es-ES, etc.
+  // We'll create a map for some common codes for improvement.
+  const languageBCP47Map = {
+    en: "en-US",
+    es: "es-ES",
+    fr: "fr-FR",
+    de: "de-DE",
+    zh: "zh-CN",
+    ja: "ja-JP",
+    ar: "ar-SA",
+    ru: "ru-RU",
+    ko: "ko-KR",
+    pt: "pt-PT"
+  };
+  const speechLang = languageBCP47Map[languageCode] || languageCode;
+
   const {
     transcript,
     listening,
     startListening,
     stopListening,
     supported
-  } = useSpeechRecognition();
+  } = useSpeechRecognition(speechLang);
 
-  const [aiMessage] = useState(`(AI) Let's practice: "${lesson?.example || ""}" Say your answer!`);
+  const [aiMessage] = useState(
+    `(AI) Let's practice: "${lesson?.example || ""}" Say your answer!`
+  );
   const [userMessage, setUserMessage] = useState("");
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const ttsUtterRef = useRef(null);
-
-  // Helper: get the selected language code ("en", "es", ...)
-  let selectedLangObj =
-    window.localStorage.getItem("selectedLanguage") &&
-    JSON.parse(window.localStorage.getItem("selectedLanguage"));
-  let defaultLang = (selectedLangObj && selectedLangObj.code) || "en";
 
   // Speak the AI message (lesson intro, etc.) on mount and AI message change
   useEffect(() => {
     if (!lesson?.example) return;
     if (!window.speechSynthesis) return;
-    try { window.speechSynthesis.cancel(); } catch { }
-    // -- Pick best Google or native voice for the lesson's language
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
+    // Pick the best matching voice for the current language code
     const voices = window.speechSynthesis.getVoices() || [];
-    // Prefer Google voice for the language code
-    let v = voices.find(
-      vo =>
-        vo.lang &&
-        vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase()) &&
-        (vo.name && /google/i.test(vo.name) || vo.voiceURI && /google/i.test(vo.voiceURI))
-    );
-    // Fallback to high-quality native
-    if (!v) {
-      v = voices.find(
-        vo => vo.lang && vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase())
+    // Prefer Google-branded voice for language, else any voice matching lang, else fallback
+    let v =
+      voices.find(
+        vo =>
+          vo.lang &&
+          vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) &&
+          ((vo.name && /google/i.test(vo.name)) ||
+            (vo.voiceURI && /google/i.test(vo.voiceURI)))
+      ) ||
+      voices.find(
+        vo =>
+          vo.lang &&
+          (vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) ||
+            vo.lang.toLowerCase() === speechLang.toLowerCase())
       );
-    }
     if (!v && voices.length > 0) v = voices[0];
-
     const utt = new window.SpeechSynthesisUtterance(
       `Let's practice. ${lesson.example}. Please say your answer!`
     );
-    utt.lang = v?.lang || defaultLang;
+    utt.lang = v?.lang || speechLang;
     if (v) utt.voice = v;
     utt.rate = 1;
     utt.pitch = 1.15;
@@ -65,30 +91,37 @@ function ConversationPage() {
     utt.onend = () => setTtsPlaying(false);
     window.speechSynthesis.speak(utt);
     return () => {
-      try { window.speechSynthesis.cancel(); } catch {}
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
     };
     // eslint-disable-next-line
-  }, [aiMessage, lesson, defaultLang]);
+  }, [aiMessage, lesson, languageCode, speechLang]);
 
   // Allow AI to repeat the phrase/pronounce on demand (same logic as above)
   const handlePronounceAgain = () => {
     if (window.speechSynthesis && lesson?.example) {
-      try { window.speechSynthesis.cancel(); } catch { }
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
       const voices = window.speechSynthesis.getVoices() || [];
-      let v = voices.find(
-        vo =>
-          vo.lang &&
-          vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase()) &&
-          (vo.name && /google/i.test(vo.name) || vo.voiceURI && /google/i.test(vo.voiceURI))
-      );
-      if (!v) {
-        v = voices.find(
-          vo => vo.lang && vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase())
+      let v =
+        voices.find(
+          vo =>
+            vo.lang &&
+            vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) &&
+            ((vo.name && /google/i.test(vo.name)) ||
+              (vo.voiceURI && /google/i.test(vo.voiceURI)))
+        ) ||
+        voices.find(
+          vo =>
+            vo.lang &&
+            (vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) ||
+              vo.lang.toLowerCase() === speechLang.toLowerCase())
         );
-      }
       if (!v && voices.length > 0) v = voices[0];
       const utt = new window.SpeechSynthesisUtterance(lesson.example);
-      utt.lang = v?.lang || defaultLang;
+      utt.lang = v?.lang || speechLang;
       utt.rate = 1;
       utt.pitch = 1.15;
       if (v) utt.voice = v;
@@ -102,27 +135,32 @@ function ConversationPage() {
     setTimeout(() => {
       if (!window.speechSynthesis) return;
       const voices = window.speechSynthesis.getVoices() || [];
-      let v = voices.find(
-        vo =>
-          vo.lang &&
-          vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase()) &&
-          (vo.name && /google/i.test(vo.name) || vo.voiceURI && /google/i.test(vo.voiceURI))
-      );
-      if (!v) {
-        v = voices.find(
-          vo => vo.lang && vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase())
+      let v =
+        voices.find(
+          vo =>
+            vo.lang &&
+            vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) &&
+            ((vo.name && /google/i.test(vo.name)) ||
+              (vo.voiceURI && /google/i.test(vo.voiceURI)))
+        ) ||
+        voices.find(
+          vo =>
+            vo.lang &&
+            (vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) ||
+              vo.lang.toLowerCase() === speechLang.toLowerCase())
         );
-      }
       if (!v && voices.length > 0) v = voices[0];
       const utt = new window.SpeechSynthesisUtterance(
         "Well done! Try to use a more complete sentence next time."
       );
-      utt.lang = v?.lang || defaultLang;
+      utt.lang = v?.lang || speechLang;
       if (v) utt.voice = v;
       utt.rate = 1;
       utt.pitch = 1.15;
       window.speechSynthesis.speak(utt);
-      alert("AI feedback: Well done! Try to use a more complete sentence next time.");
+      alert(
+        "AI feedback: Well done! Try to use a more complete sentence next time."
+      );
     }, 400);
   };
 
@@ -131,7 +169,7 @@ function ConversationPage() {
   }
 
   return (
-    <div style={{position: "relative", minHeight: 430}}>
+    <div style={{ position: "relative", minHeight: 430 }}>
       <div className="conversation-page">
         <h2>AI-Powered Voice Practice</h2>
         <div className="conversation-box">
@@ -139,10 +177,22 @@ function ConversationPage() {
             {aiMessage}
             <button
               onClick={handlePronounceAgain}
-              style={{marginLeft: 10, fontSize: "0.90rem"}}
+              style={{ marginLeft: 10, fontSize: "0.90rem" }}
               title="Hear pronunciation again"
-            >🔊</button>
-            {ttsPlaying && <span style={{marginLeft:10, color:"var(--primary-color)", fontWeight:400}}>Speaking...</span>}
+            >
+              🔊
+            </button>
+            {ttsPlaying && (
+              <span
+                style={{
+                  marginLeft: 10,
+                  color: "var(--primary-color)",
+                  fontWeight: 400
+                }}
+              >
+                Speaking...
+              </span>
+            )}
           </div>
           <div className="user-message">
             <button
@@ -150,7 +200,9 @@ function ConversationPage() {
               onMouseDown={startListening}
               onMouseUp={stopListening}
             >
-              {listening ? "Listening... (release to finish)" : "🎙️ Hold to Speak"}
+              {listening
+                ? "Listening... (release to finish)"
+                : "🎙️ Hold to Speak"}
             </button>
             <div className="user-transcript">{transcript}</div>
           </div>
@@ -162,7 +214,9 @@ function ConversationPage() {
             Submit
           </button>
         </div>
-        <button className="btn btn-primary" style={{marginTop:24}}
+        <button
+          className="btn btn-primary"
+          style={{ marginTop: 24 }}
           onClick={() => navigate(`/challenge/${lesson.level}`)}
         >
           Take Speaking Challenge

@@ -4,25 +4,43 @@ import { useProgress } from "../context/ProgressContext";
 import "../App.css";
 
 // PUBLIC_INTERFACE
+/**
+ * LessonPage uses selectedLanguage from ProgressContext for TTS (no hardcoded localStorage/english fallback).
+ */
 function LessonPage() {
   const { levelId } = useParams();
   const {
     levels,
     beginLevelPractice,
-    nextAvailableLevel
+    nextAvailableLevel,
+    selectedLanguage
   } = useProgress();
   const levelIdx = levels.findIndex(l => String(l.level) === String(levelId));
   const level = levels[levelIdx];
   const navigate = useNavigate();
 
-  const [wordsReviewed, setWordsReviewed] = useState(Array(level?.words.length || 0).fill(false));
-  const [isMarkedPractice, setIsMarkedPractice] = useState(!!level?.practiceComplete);
+  const [wordsReviewed, setWordsReviewed] = useState(
+    Array(level?.words.length || 0).fill(false)
+  );
+  const [isMarkedPractice, setIsMarkedPractice] = useState(
+    !!level?.practiceComplete
+  );
 
-  // Determine learning language code for TTS selection
-  let selectedLangObj =
-    window.localStorage.getItem("selectedLanguage") &&
-    JSON.parse(window.localStorage.getItem("selectedLanguage"));
-  let defaultLang = (selectedLangObj && selectedLangObj.code) || "en";
+  // Use BCP47 code if possible for TTS
+  const languageBCP47Map = {
+    en: "en-US",
+    es: "es-ES",
+    fr: "fr-FR",
+    de: "de-DE",
+    zh: "zh-CN",
+    ja: "ja-JP",
+    ar: "ar-SA",
+    ru: "ru-RU",
+    ko: "ko-KR",
+    pt: "pt-PT"
+  };
+  const languageCode = selectedLanguage?.code || "en";
+  const speechLang = languageBCP47Map[languageCode] || languageCode;
 
   if (!level) return <div>Lesson not found</div>;
 
@@ -31,7 +49,10 @@ function LessonPage() {
     return (
       <div className="lesson-page">
         <h2>Level {level.level} is Locked</h2>
-        <p>You need to pass Level {level.level - 1} with at least 75% accuracy to unlock this level.</p>
+        <p>
+          You need to pass Level {level.level - 1} with at least 75% accuracy to
+          unlock this level.
+        </p>
       </div>
     );
 
@@ -41,69 +62,61 @@ function LessonPage() {
     setIsMarkedPractice(true);
   };
 
-  // Helper: robustly select the best matching voice for the selected language code.
-  function pickBestVoiceForLanguage(langCode) {
-    if (!window.speechSynthesis) return { voice: null, lang: langCode, fallback: true };
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices || voices.length === 0) return { voice: null, lang: langCode, fallback: true };
-    // Step 1: Try for exact BCP47 match (e.g., es-ES for "es")
-    let mainLang = langCode;
-    // Step 2: Look for best match
-    let exact = voices.find(v => v.lang && v.lang.toLowerCase() === langCode.toLowerCase());
-    if (exact) return { voice: exact, lang: exact.lang, fallback: false, voiceName: exact.name };
-    // Step 3: Look for ones that start with language code (es, es-ES, es-MX, ...)
-    let prefix = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(mainLang.toLowerCase() + '-'));
-    if (prefix) return { voice: prefix, lang: prefix.lang, fallback: false, voiceName: prefix.name };
-    // Step 4: Any voice with just the plain language code
-    let justLang = voices.find(v => v.lang && v.lang.substr(0, 2).toLowerCase() === mainLang.toLowerCase());
-    if (justLang) return { voice: justLang, lang: justLang.lang, fallback: false, voiceName: justLang.name };
-    // Step 5: Fallback, return first available
-    return { voice: voices[0], lang: voices[0].lang, fallback: true, voiceName: voices[0].name };
-  }
-
   return (
     <div style={{ position: "relative", minHeight: 330 }}>
       <div className="lesson-page">
         <h2>Level {level.level}: Practice Words</h2>
-        <p>Go through each word. Listen and say it aloud to practice speaking.</p>
+        <p>
+          Go through each word. Listen and say it aloud to practice speaking.
+        </p>
         <ul style={{ paddingLeft: 0, listStyle: "none", fontSize: "1.18rem" }}>
           {level.words.map((word, idx) => (
-            <li key={word + idx} style={{
-              marginBottom: 10,
-              background: "#eaf9fa",
-              display: "flex",
-              alignItems: "center",
-              padding: "7px 16px",
-              borderRadius: "4px"
-            }}>
-              <b style={{minWidth:48}}>{idx + 1}.</b>
-              <span style={{flex:1}}>{word}</span>
+            <li
+              key={word + idx}
+              style={{
+                marginBottom: 10,
+                background: "#eaf9fa",
+                display: "flex",
+                alignItems: "center",
+                padding: "7px 16px",
+                borderRadius: "4px"
+              }}
+            >
+              <b style={{ minWidth: 48 }}>{idx + 1}.</b>
+              <span style={{ flex: 1 }}>{word}</span>
               <button
                 className="btn btn-accent"
-                style={{ marginLeft: 14, padding: "2px 17px", fontSize: "0.97rem" }}
+                style={{
+                  marginLeft: 14,
+                  padding: "2px 17px",
+                  fontSize: "0.97rem"
+                }}
                 title="Hear pronunciation"
                 onClick={async () => {
                   // Always use best Google voice for language, fallback to high quality native
                   if (window.speechSynthesis && word) {
-                    try { window.speechSynthesis.cancel(); } catch { }
+                    try {
+                      window.speechSynthesis.cancel();
+                    } catch {}
                     const voices = window.speechSynthesis.getVoices() || [];
-                    // Step 1: Google voice for language (matches code, Google in name/voiceURI)
-                    let v = voices.find(
-                      vo =>
-                        vo.lang &&
-                        vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase()) &&
-                        (vo.name && /google/i.test(vo.name) || vo.voiceURI && /google/i.test(vo.voiceURI))
-                    );
-                    // Step 2: Native voice with language
-                    if (!v) {
-                      v = voices.find(
-                        vo => vo.lang && vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase())
+                    // Prefer Google-branded voice for language
+                    let v =
+                      voices.find(
+                        vo =>
+                          vo.lang &&
+                          vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) &&
+                          ((vo.name && /google/i.test(vo.name)) ||
+                            (vo.voiceURI && /google/i.test(vo.voiceURI)))
+                      ) ||
+                      voices.find(
+                        vo =>
+                          vo.lang &&
+                          (vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) ||
+                            vo.lang.toLowerCase() === speechLang.toLowerCase())
                       );
-                    }
-                    // Step 3: Any available voice
                     if (!v && voices.length > 0) v = voices[0];
                     const ut = new window.SpeechSynthesisUtterance(word);
-                    ut.lang = v?.lang || defaultLang;
+                    ut.lang = v?.lang || speechLang;
                     ut.rate = 1;
                     ut.pitch = 1.15;
                     if (v) ut.voice = v;
@@ -117,11 +130,13 @@ function LessonPage() {
               >
                 🔊
               </button>
-              <span style={{
-                color: wordsReviewed[idx] ? "var(--accent-color)" : "#aaa",
-                fontWeight: 700,
-                marginLeft: 12
-              }}>
+              <span
+                style={{
+                  color: wordsReviewed[idx] ? "var(--accent-color)" : "#aaa",
+                  fontWeight: 700,
+                  marginLeft: 12
+                }}
+              >
                 {wordsReviewed[idx] ? "✓" : ""}
               </span>
             </li>
@@ -138,7 +153,11 @@ function LessonPage() {
         <div>
           <button
             className="btn btn-primary"
-            style={{ marginTop: 28, marginLeft: 5, fontFamily: 'Arial, sans-serif' }}
+            style={{
+              marginTop: 28,
+              marginLeft: 5,
+              fontFamily: "Arial, sans-serif"
+            }}
             disabled={!isMarkedPractice}
             onClick={() => navigate(`/challenge/${level.level}`)}
           >
