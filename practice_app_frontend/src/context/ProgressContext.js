@@ -1,20 +1,80 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
-// Helper: Example word pool for basic language; expand as needed.
-const BASIC_WORDS = [
-  "hello", "goodbye", "please", "thank", "you", "yes", "no", "sorry", "help", "friend",
-  "water", "food", "bathroom", "where", "is", "my", "name", "what", "how", "much",
-  "one", "two", "three", "love", "family", "school", "teacher", "student", "learn", "speak",
-  "more", "again", "repeat", "slowly", "fast", "understand", "not", "can", "do", "like"
-];
+/**
+ * Vocabulary: actual translations for each supported language, using
+ * human-translated core words/phrases. Per language code, each array aligns positions.
+ */
+const LANGUAGE_VOCAB = {
+  en: [
+    "hello", "goodbye", "please", "thank you", "yes", "no", "sorry", "help", "friend", "water",
+    "food", "bathroom", "where", "is", "my", "name", "what", "how", "much", "one",
+    "two", "three", "love", "family", "school", "teacher", "student", "learn", "speak",
+    "more", "again", "repeat", "slowly", "fast", "understand", "not", "can", "do", "like"
+  ],
+  es: [
+    "hola", "adiós", "por favor", "gracias", "sí", "no", "lo siento", "ayuda", "amigo", "agua",
+    "comida", "baño", "dónde", "es", "mi", "nombre", "qué", "cómo", "cuánto", "uno",
+    "dos", "tres", "amor", "familia", "escuela", "maestro", "estudiante", "aprender", "hablar",
+    "más", "otra vez", "repetir", "despacio", "rápido", "entender", "no", "puede", "hacer", "gustar"
+  ],
+  fr: [
+    "bonjour", "au revoir", "s'il vous plaît", "merci", "oui", "non", "désolé", "aide", "ami", "eau",
+    "nourriture", "toilettes", "où", "est", "mon", "nom", "quoi", "comment", "combien", "un",
+    "deux", "trois", "amour", "famille", "école", "professeur", "étudiant", "apprendre", "parler",
+    "plus", "encore", "répéter", "lentement", "vite", "comprendre", "pas", "pouvoir", "faire", "aimer"
+  ],
+  de: [
+    "hallo", "auf Wiedersehen", "bitte", "danke", "ja", "nein", "entschuldigung", "hilfe", "freund", "wasser",
+    "essen", "badezimmer", "wo", "ist", "mein", "name", "was", "wie", "wie viel", "eins",
+    "zwei", "drei", "liebe", "familie", "schule", "lehrer", "schüler", "lernen", "sprechen",
+    "mehr", "wieder", "wiederholen", "langsam", "schnell", "verstehen", "nicht", "können", "machen", "mögen"
+  ],
+  zh: [
+    "你好", "再见", "请", "谢谢", "是", "不是", "对不起", "帮助", "朋友", "水",
+    "食物", "洗手间", "哪里", "是", "我的", "名字", "什么", "怎么", "多少", "一",
+    "二", "三", "爱", "家庭", "学校", "老师", "学生", "学习", "说",
+    "更多", "再一次", "重复", "慢", "快", "理解", "不是", "能", "做", "喜欢"
+  ],
+  ja: [
+    "こんにちは", "さようなら", "お願いします", "ありがとう", "はい", "いいえ", "ごめんなさい", "助けて", "友達", "水",
+    "食べ物", "トイレ", "どこ", "です", "私の", "名前", "何", "どう", "いくら", "一",
+    "二", "三", "愛", "家族", "学校", "先生", "学生", "学ぶ", "話す",
+    "もっと", "もう一度", "繰り返す", "ゆっくり", "速く", "理解する", "ない", "できる", "する", "好き"
+  ],
+  ar: [
+    "مرحبا", "وداعا", "من فضلك", "شكرا", "نعم", "لا", "آسف", "مساعدة", "صديق", "ماء",
+    "طعام", "حمام", "أين", "هو", "لي", "اسم", "ماذا", "كيف", "كم", "واحد",
+    "اثنان", "ثلاثة", "حب", "عائلة", "مدرسة", "معلم", "طالب", "يتعلم", "يتكلم",
+    "أكثر", "مرة أخرى", "كرر", "ببطء", "بسرعة", "يفهم", "ليس", "يمكن", "يفعل", "يحب"
+  ],
+  ru: [
+    "привет", "до свидания", "пожалуйста", "спасибо", "да", "нет", "извини", "помощь", "друг", "вода",
+    "еда", "ванная", "где", "есть", "мой", "имя", "что", "как", "сколько", "один",
+    "два", "три", "любовь", "семья", "школа", "учитель", "студент", "учиться", "говорить",
+    "ещё", "опять", "повторить", "медленно", "быстро", "понимать", "не", "мочь", "делать", "нравиться"
+  ],
+  ko: [
+    "안녕하세요", "안녕히 가세요", "제발", "감사합니다", "네", "아니요", "미안합니다", "도와주세요", "친구", "물",
+    "음식", "화장실", "어디", "이다", "나의", "이름", "무엇", "어떻게", "얼마", "하나",
+    "둘", "셋", "사랑", "가족", "학교", "선생님", "학생", "배우다", "말하다",
+    "더", "다시", "반복하다", "천천히", "빠르게", "이해하다", "아니다", "할 수 있다", "하다", "좋아하다"
+  ],
+  pt: [
+    "olá", "adeus", "por favor", "obrigado", "sim", "não", "desculpe", "ajuda", "amigo", "água",
+    "comida", "banheiro", "onde", "é", "meu", "nome", "o que", "como", "quanto", "um",
+    "dois", "três", "amor", "família", "escola", "professor", "aluno", "aprender", "falar",
+    "mais", "de novo", "repetir", "devagar", "rápido", "entender", "não", "poder", "fazer", "gostar"
+  ],
+};
 
 /**
- * Create levels, each with 10 words: new words and mix of reviewed words for spaced repetition.
- * Returns: Array of {level, words: [10 strings], ...}
- * Approach: Each new level introduces new words (in order), and mixes previous words for review.
- * Level test and practice phase flags are managed per user progress in localStorage.
+ * Create levels from the relevant translated word list for the current language.
+ * Each level introduces new words (in order), and mixes previous words for review (spaced repetition).
+ * Real translation is used for each word in the target language.
  */
-function createLevelData(wordList, wordsPerLevel = 10, reviewMix = 0.3) {
+function createLevelDataForLanguage(languageCode, wordsPerLevel = 10, reviewMix = 0.3) {
+  // Default to English if unknown code
+  const wordList = LANGUAGE_VOCAB[languageCode] || LANGUAGE_VOCAB["en"];
   const levels = [];
   let index = 0;
   let learnedWords = [];
@@ -33,7 +93,6 @@ function createLevelData(wordList, wordsPerLevel = 10, reviewMix = 0.3) {
         reviewWords.push(word);
       }
     }
-    // Assemble list for this level
     const wordSet = [...newWords, ...reviewWords].slice(0, wordsPerLevel);
     levels.push({
       level,
@@ -42,9 +101,7 @@ function createLevelData(wordList, wordsPerLevel = 10, reviewMix = 0.3) {
       practiceComplete: false,
       testScore: null // e.g. {score: %, passed: bool}
     });
-    // Move index
     index += countNew;
-    // Track what is learned
     learnedWords = learnedWords.concat(newWords);
     level++;
   }
@@ -55,18 +112,23 @@ function createLevelData(wordList, wordsPerLevel = 10, reviewMix = 0.3) {
 const ProgressContext = createContext();
 
 export function ProgressProvider({ children }) {
-  // Levels state
-  const [levels, setLevels] = useState(
-    () => JSON.parse(localStorage.getItem("levels")) || createLevelData(BASIC_WORDS, 10)
-  );
-  const [selectedLanguage, setSelectedLanguage] = useState(
-    () => JSON.parse(localStorage.getItem("selectedLanguage")) || null
-  );
+  // Each language has its own levels/progress and settings in localStorage, keyed by language.
+  const defaultLanguage = JSON.parse(localStorage.getItem("selectedLanguage")) || { code: "en", label: "English" };
+  const [selectedLanguage, setSelectedLanguage] = useState(defaultLanguage);
 
-  // Level tracking for current user session
+  // Initial levels loaded for selected language; fallback to English if not set.
+  const [levels, setLevels] = useState(() => {
+    const key = selectedLanguage ? `levels_${selectedLanguage.code}` : "levels_en";
+    const cached = localStorage.getItem(key);
+    if (cached) return JSON.parse(cached);
+    return createLevelDataForLanguage(selectedLanguage?.code || "en", 10);
+  });
+
+  // When levels or language changes, update the correct localStorage keys
   useEffect(() => {
-    localStorage.setItem("levels", JSON.stringify(levels));
-  }, [levels]);
+    const key = selectedLanguage ? `levels_${selectedLanguage.code}` : "levels_en";
+    localStorage.setItem(key, JSON.stringify(levels));
+  }, [levels, selectedLanguage]);
   useEffect(() => {
     localStorage.setItem("selectedLanguage", JSON.stringify(selectedLanguage));
   }, [selectedLanguage]);
@@ -81,7 +143,6 @@ export function ProgressProvider({ children }) {
   function beginLevelPractice(levelNumber) {
     const idx = levels.findIndex(l => l.level === +levelNumber);
     if (idx >= 0 && !levels[idx].practiceComplete) {
-      // Mark practice as started (could be extended to store timestamps, etc)
       setLevels(lvs => {
         const copy = [...lvs];
         copy[idx].practiceComplete = true;
@@ -102,6 +163,20 @@ export function ProgressProvider({ children }) {
       if (passed) copy[idx].complete = true;
       return copy;
     });
+  }
+
+  // PUBLIC_INTERFACE
+  // When the user selects a new language, also update levels accordingly
+  function handleSetSelectedLanguage(langObj) {
+    setSelectedLanguage(langObj);
+    // Initialize new levels for that language (or load from localStorage if exists)
+    const key = langObj ? `levels_${langObj.code}` : "levels_en";
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      setLevels(JSON.parse(cached));
+    } else {
+      setLevels(createLevelDataForLanguage(langObj.code, 10));
+    }
   }
 
   // Progress stats
@@ -132,7 +207,7 @@ export function ProgressProvider({ children }) {
         lessons,
         stats,
         selectedLanguage,
-        setSelectedLanguage,
+        setSelectedLanguage: handleSetSelectedLanguage,
         nextAvailableLevel,
         beginLevelPractice,
         markLevelTestScore
