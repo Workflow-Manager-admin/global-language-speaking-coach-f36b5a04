@@ -25,36 +25,39 @@ function ConversationPage() {
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const ttsUtterRef = useRef(null);
 
-  // --- Helper: find matching browser voice for selected language ---
-  const pickVoiceAndLang = () => {
-    let fallback = false;
-    let langCode =
-      (window.localStorage.getItem("selectedLanguage") &&
-        JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
-      "en";
-    const langMap = {
-      en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar",
-      ru: "ru", ko: "ko", pt: "pt"
-    };
-    langCode = langMap[langCode] || "en";
+  // --- Helper: robustly select the best matching voice for the selected language code. Copied from LessonPage.js for consistency.
+  function pickBestVoiceForLanguage(langCode) {
+    if (!window.speechSynthesis) return { voice: null, lang: langCode, fallback: true };
     const voices = window.speechSynthesis.getVoices();
-    let voice =
-      voices.find((v) => v.lang && v.lang.substr(0, 2) === langCode) ||
-      voices.find((v) => v.lang && v.lang.toLowerCase().includes(langCode + "-")) ||
-      voices.find((v) => v.lang && v.lang.toLowerCase().includes(langCode)) ||
-      null;
-    if (!voice && voices.length > 0) {
-      fallback = true;
-      voice = voices[0];
-    }
-    return { voice, lang: voice?.lang || langCode, fallback, voiceName: voice?.name || "" };
-  };
+    if (!voices || voices.length === 0) return { voice: null, lang: langCode, fallback: true };
+    // Step 1: Try for exact BCP47 match
+    let mainLang = langCode;
+    let exact = voices.find(v => v.lang && v.lang.toLowerCase() === langCode.toLowerCase());
+    if (exact) return { voice: exact, lang: exact.lang, fallback: false, voiceName: exact.name };
+    // Step 2: Prefix match
+    let prefix = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(mainLang.toLowerCase() + '-'));
+    if (prefix) return { voice: prefix, lang: prefix.lang, fallback: false, voiceName: prefix.name };
+    // Step 3: 2-letter lang code only
+    let justLang = voices.find(v => v.lang && v.lang.substr(0, 2).toLowerCase() === mainLang.toLowerCase());
+    if (justLang) return { voice: justLang, lang: justLang.lang, fallback: false, voiceName: justLang.name };
+    // Step 4: Fallback
+    return { voice: voices[0], lang: voices[0].lang, fallback: true, voiceName: voices[0].name };
+  }
 
   // Speak the AI message (e.g., on load and after user submits)
   useEffect(() => {
     let fallbackTTS = false;
     if (aiMessage && window.speechSynthesis && lesson?.example) {
-      const { voice, lang, fallback } = pickVoiceAndLang();
+      let langCode =
+        (window.localStorage.getItem("selectedLanguage") &&
+          JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
+        "en";
+      const langMap = {
+        en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar",
+        ru: "ru", ko: "ko", pt: "pt"
+      };
+      langCode = langMap[langCode] || "en";
+      const { voice, lang, fallback } = pickBestVoiceForLanguage(langCode);
       fallbackTTS = fallback;
       const utt = new window.SpeechSynthesisUtterance(
         `Let's practice. ${lesson.example}. Please say your answer!`
@@ -84,7 +87,16 @@ function ConversationPage() {
     let fallback = false;
     if (window.speechSynthesis && lesson?.example) {
       try { window.speechSynthesis.cancel(); } catch { }
-      const { voice, lang, fallback: fallbackInner } = pickVoiceAndLang();
+      let langCode =
+        (window.localStorage.getItem("selectedLanguage") &&
+        JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
+        "en";
+      const langMap = {
+        en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar",
+        ru: "ru", ko: "ko", pt: "pt"
+      };
+      langCode = langMap[langCode] || "en";
+      const { voice, lang, fallback: fallbackInner } = pickBestVoiceForLanguage(langCode);
       fallback = fallbackInner;
       const utt = new window.SpeechSynthesisUtterance(lesson.example);
       utt.lang = lang;
@@ -107,7 +119,16 @@ function ConversationPage() {
       // Simulated spoken feedback in correct language
       let fallback = false;
       if (window.speechSynthesis) {
-        const { voice, lang, fallback: fallbackInner } = pickVoiceAndLang();
+        let langCode =
+          (window.localStorage.getItem("selectedLanguage") &&
+            JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
+          "en";
+        const langMap = {
+          en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar",
+          ru: "ru", ko: "ko", pt: "pt"
+        };
+        langCode = langMap[langCode] || "en";
+        const { voice, lang, fallback: fallbackInner } = pickBestVoiceForLanguage(langCode);
         fallback = fallbackInner;
         const utt = new window.SpeechSynthesisUtterance(
           "Well done! Try to use a more complete sentence next time."

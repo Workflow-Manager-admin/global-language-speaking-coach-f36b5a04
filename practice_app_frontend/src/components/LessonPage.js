@@ -35,6 +35,26 @@ function LessonPage() {
     setIsMarkedPractice(true);
   };
 
+  // Helper: robustly select the best matching voice for the selected language code.
+  function pickBestVoiceForLanguage(langCode) {
+    if (!window.speechSynthesis) return { voice: null, lang: langCode, fallback: true };
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return { voice: null, lang: langCode, fallback: true };
+    // Step 1: Try for exact BCP47 match (e.g., es-ES for "es")
+    let mainLang = langCode;
+    // Step 2: Look for best match
+    let exact = voices.find(v => v.lang && v.lang.toLowerCase() === langCode.toLowerCase());
+    if (exact) return { voice: exact, lang: exact.lang, fallback: false, voiceName: exact.name };
+    // Step 3: Look for ones that start with language code (es, es-ES, es-MX, ...)
+    let prefix = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(mainLang.toLowerCase() + '-'));
+    if (prefix) return { voice: prefix, lang: prefix.lang, fallback: false, voiceName: prefix.name };
+    // Step 4: Any voice with just the plain language code
+    let justLang = voices.find(v => v.lang && v.lang.substr(0, 2).toLowerCase() === mainLang.toLowerCase());
+    if (justLang) return { voice: justLang, lang: justLang.lang, fallback: false, voiceName: justLang.name };
+    // Step 5: Fallback, return first available
+    return { voice: voices[0], lang: voices[0].lang, fallback: true, voiceName: voices[0].name };
+  }
+
   return (
     <div style={{ position: "relative", minHeight: 330 }}>
       <div className="lesson-page">
@@ -65,7 +85,7 @@ function LessonPage() {
                       (window.localStorage.getItem("selectedLanguage") &&
                       JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
                       "en";
-                    // Map language code if needed for speech
+                    // Map language code (in reality, passed through from selector)
                     const langMap = {
                       en: "en",
                       es: "es",
@@ -79,23 +99,14 @@ function LessonPage() {
                       pt: "pt",
                     };
                     langCode = langMap[langCode] || "en";
-                    const voices = window.speechSynthesis.getVoices();
-                    // Try multiple matching methods
-                    let voice =
-                      voices.find((v) => v.lang && v.lang.substr(0, 2) === langCode) ||
-                      voices.find((v) => v.lang && v.lang.toLowerCase().includes(langCode + "-")) ||
-                      voices.find((v) => v.lang && v.lang.toLowerCase().includes(langCode)) ||
-                      null;
-                    if (!voice && voices.length > 0) {
-                      // fallback to first voice
-                      fallback = true;
-                      voice = voices[0];
-                    }
+                    // Use robust matching function
+                    const { voice, lang, fallback: fb, voiceName } = pickBestVoiceForLanguage(langCode);
+                    fallback = fb;
+                    chosenVoiceName = voiceName;
                     const ut = new window.SpeechSynthesisUtterance(word);
-                    ut.lang = voice?.lang || langCode;
+                    ut.lang = lang || langCode;
                     if (voice) {
                       ut.voice = voice;
-                      chosenVoiceName = voice.name || "";
                     }
                     window.speechSynthesis.speak(ut);
                   }
@@ -136,11 +147,11 @@ function LessonPage() {
         <div>
           <button
             className="btn btn-primary"
-            style={{ marginTop: 28, marginLeft: 5 }}
+            style={{ marginTop: 28, marginLeft: 5, fontFamily: 'Arial, sans-serif' }}
             disabled={!isMarkedPractice}
             onClick={() => navigate(`/challenge/${level.level}`)}
           >
-            {isMarkedPractice ? "Take Level Test" : "Practice All Words to Unlock Test"}
+            {isMarkedPractice ? "Take Level Test" : "Unlock Test"}
           </button>
         </div>
       </div>
