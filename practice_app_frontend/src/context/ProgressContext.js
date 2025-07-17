@@ -68,41 +68,59 @@ const LANGUAGE_VOCAB = {
 };
 
 /**
- * Create levels from the relevant translated word list for the current language.
- * Each level introduces new words (in order), and mixes previous words for review (spaced repetition).
- * Real translation is used for each word in the target language.
+ * Create levels from the relevant translated word list for the current language,
+ * aligned with the base language (so each word index is a translation pair).
+ * Returns each lesson as an array of {word, translation}.
  */
-function createLevelDataForLanguage(languageCode, wordsPerLevel = 10, reviewMix = 0.3) {
-  // Default to English if unknown code
-  const wordList = LANGUAGE_VOCAB[languageCode] || LANGUAGE_VOCAB["en"];
+function createLevelDataForLanguageWithTranslations(targetLanguageCode, baseLanguageCode, wordsPerLevel = 10, reviewMix = 0.3) {
+  // Fallback to English if needed
+  const targetWords = LANGUAGE_VOCAB[targetLanguageCode] || LANGUAGE_VOCAB["en"];
+  const baseWords = LANGUAGE_VOCAB[baseLanguageCode] || LANGUAGE_VOCAB["en"];
+  // Both lists are aligned by index
   const levels = [];
   let index = 0;
-  let learnedWords = [];
+  let learnedIndices = [];
   let level = 1;
-  while (index < wordList.length) {
-    // Select new words for this level
-    const countNew = Math.min(wordsPerLevel - Math.floor(wordsPerLevel * reviewMix), wordList.length - index);
-    const newWords = wordList.slice(index, index + countNew);
-    // Add some review words (from learned so far, but not from this batch)
-    const eligibleForReview = learnedWords.slice(0);
-    let reviewWords = [];
-    if (eligibleForReview.length > 0 && wordsPerLevel - newWords.length > 0) {
-      for (let k = 0; k < wordsPerLevel - newWords.length; k++) {
-        // Use random review or repeat first review
-        const word = eligibleForReview.length === 0 ? "" : eligibleForReview[Math.floor(Math.random() * eligibleForReview.length)];
-        reviewWords.push(word);
+  while (index < targetWords.length) {
+    // New words
+    const countNew = Math.min(
+      wordsPerLevel - Math.floor(wordsPerLevel * reviewMix),
+      targetWords.length - index
+    );
+    const newIndices = [];
+    for (let i = 0; i < countNew; i++) newIndices.push(index + i);
+
+    // Eligible for review: indices of previous learned
+    const eligibleReview = learnedIndices.slice(0);
+    let reviewIndices = [];
+    if (eligibleReview.length > 0 && wordsPerLevel - newIndices.length > 0) {
+      for (let k = 0; k < wordsPerLevel - newIndices.length; k++) {
+        // Use random review index, fallback to the first
+        const idx =
+          eligibleReview.length === 0
+            ? 0
+            : eligibleReview[Math.floor(Math.random() * eligibleReview.length)];
+        reviewIndices.push(idx);
       }
     }
-    const wordSet = [...newWords, ...reviewWords].slice(0, wordsPerLevel);
+    const wordIndices = [...newIndices, ...reviewIndices].slice(0, wordsPerLevel);
+
+    const wordPairs = wordIndices.map(idx => ({
+      word: targetWords[idx] ?? "",
+      translation: baseWords[idx] ?? "",
+      idx: idx
+    }));
+
     levels.push({
       level,
-      words: wordSet,
+      words: wordPairs, // [{word, translation, idx}]
       complete: false,
       practiceComplete: false,
-      testScore: null // e.g. {score: %, passed: bool}
+      testScore: null
     });
+
     index += countNew;
-    learnedWords = learnedWords.concat(newWords);
+    learnedIndices = learnedIndices.concat(newIndices);
     level++;
   }
   return levels;
@@ -112,32 +130,88 @@ function createLevelDataForLanguage(languageCode, wordsPerLevel = 10, reviewMix 
 const ProgressContext = createContext();
 
 export function ProgressProvider({ children }) {
-  // Each language has its own levels/progress and settings in localStorage, keyed by language.
-  const defaultLanguage = JSON.parse(localStorage.getItem("selectedLanguage")) || { code: "en", label: "English" };
-  const [selectedLanguage, setSelectedLanguage] = useState(defaultLanguage);
+  // Known ('base') language selection
+  const defaultBaseLanguage = JSON.parse(localStorage.getItem("baseLanguage")) || { code: "en", label: "English" };
+  const defaultTargetLanguage = JSON.parse(localStorage.getItem("selectedLanguage")) || { code: "es", label: "Spanish" };
 
-  // Initial levels loaded for selected language; fallback to English if not set.
+  const [baseLanguage, setBaseLanguage] = useState(defaultBaseLanguage);
+  const [selectedLanguage, setSelectedLanguage] = useState(defaultTargetLanguage);
+
+  // Initial levels loaded for (base, target) combination.
   const [levels, setLevels] = useState(() => {
-    const key = selectedLanguage ? `levels_${selectedLanguage.code}` : "levels_en";
+    const key =
+      baseLanguage && selectedLanguage
+        ? `levels_${baseLanguage.code}_${selectedLanguage.code}`
+        : "levels_en_es";
     const cached = localStorage.getItem(key);
     if (cached) return JSON.parse(cached);
-    return createLevelDataForLanguage(selectedLanguage?.code || "en", 10);
+    return createLevelDataForLanguageWithTranslations(
+      selectedLanguage?.code || "es",
+      baseLanguage?.code || "en",
+      10
+    );
   });
 
-  // When levels or language changes, update the correct localStorage keys
+  // When levels, base, or target changes, update the correct localStorage keys
   useEffect(() => {
-    const key = selectedLanguage ? `levels_${selectedLanguage.code}` : "levels_en";
+    const key =
+      baseLanguage && selectedLanguage
+        ? `levels_${baseLanguage.code}_${selectedLanguage.code}`
+        : "levels_en_es";
     localStorage.setItem(key, JSON.stringify(levels));
-  }, [levels, selectedLanguage]);
+  }, [levels, baseLanguage, selectedLanguage]);
   useEffect(() => {
     localStorage.setItem("selectedLanguage", JSON.stringify(selectedLanguage));
   }, [selectedLanguage]);
+  useEffect(() => {
+    localStorage.setItem("baseLanguage", JSON.stringify(baseLanguage));
+  }, [baseLanguage]);
 
-  // Which level can user currently access? Progress gate: Only levels with all previous tests >= 75%
-  const lastPassedLevel = levels.reduce((acc, l, idx) =>
-    (l.testScore && l.testScore.passed) ? idx + 1 : acc, 0
+  // When user switches the base or study language, reset (or load) the appropriate level data
+  function handleSetSelectedLanguage(langObj) {
+    setSelectedLanguage(langObj);
+    // Try to load or create for (baseLanguage, langObj)
+    const key =
+      baseLanguage && langObj
+        ? `levels_${baseLanguage.code}_${langObj.code}`
+        : "levels_en_es";
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      setLevels(JSON.parse(cached));
+    } else {
+      setLevels(createLevelDataForLanguageWithTranslations(
+        langObj.code,
+        baseLanguage?.code || "en",
+        10
+      ));
+    }
+  }
+  function handleSetBaseLanguage(langObj) {
+    setBaseLanguage(langObj);
+    // Try to load or create for (langObj, selectedLanguage)
+    const key =
+      langObj && selectedLanguage
+        ? `levels_${langObj.code}_${selectedLanguage.code}`
+        : "levels_en_es";
+    const cached = localStorage.getItem(key);
+    if (cached) {
+      setLevels(JSON.parse(cached));
+    } else {
+      setLevels(createLevelDataForLanguageWithTranslations(
+        selectedLanguage?.code || "es",
+        langObj.code,
+        10
+      ));
+    }
+  }
+
+  // Which level can user currently access?
+  const lastPassedLevel = levels.reduce(
+    (acc, l, idx) =>
+      l.testScore && l.testScore.passed ? idx + 1 : acc,
+    0
   );
-  const nextAvailableLevel = lastPassedLevel + 1; // 1-based
+  const nextAvailableLevel = lastPassedLevel + 1;
 
   // PUBLIC_INTERFACE
   function beginLevelPractice(levelNumber) {
@@ -150,10 +224,8 @@ export function ProgressProvider({ children }) {
       });
     }
   }
-
   // PUBLIC_INTERFACE
   function markLevelTestScore(levelNumber, score) {
-    // "score" is percent, pass is >=75%
     const passed = score >= 75;
     setLevels(lvs => {
       const idx = lvs.findIndex(l => l.level === +levelNumber);
@@ -165,20 +237,6 @@ export function ProgressProvider({ children }) {
     });
   }
 
-  // PUBLIC_INTERFACE
-  // When the user selects a new language, also update levels accordingly
-  function handleSetSelectedLanguage(langObj) {
-    setSelectedLanguage(langObj);
-    // Initialize new levels for that language (or load from localStorage if exists)
-    const key = langObj ? `levels_${langObj.code}` : "levels_en";
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      setLevels(JSON.parse(cached));
-    } else {
-      setLevels(createLevelDataForLanguage(langObj.code, 10));
-    }
-  }
-
   // Progress stats
   const highestUnlocked = Math.max(...levels.map((l, idx) => l.complete ? l.level : 1), 1);
   const totalLevels = levels.length;
@@ -187,13 +245,13 @@ export function ProgressProvider({ children }) {
     totalLevels,
     completed,
     level: highestUnlocked,
-    progressPercent: Math.round((completed / totalLevels) * 100),
+    progressPercent: Math.round((completed / totalLevels) * 100)
   };
 
-  // Raw lessons for UI compatibility, but derived from new levels
+  // Lessons: each word is now {word, translation}
   const lessons = levels.map(l => ({
     level: l.level,
-    words: l.words,
+    words: l.words, // [{word, translation, idx}]
     title: "Level " + l.level,
     description: "Practice the following set of words.",
     completed: l.practiceComplete,
@@ -208,10 +266,13 @@ export function ProgressProvider({ children }) {
         stats,
         selectedLanguage,
         setSelectedLanguage: handleSetSelectedLanguage,
+        baseLanguage,
+        setBaseLanguage: handleSetBaseLanguage,
         nextAvailableLevel,
         beginLevelPractice,
-        markLevelTestScore
-      }}>
+        markLevelTestScore,
+      }}
+    >
       {children}
     </ProgressContext.Provider>
   );

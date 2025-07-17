@@ -50,6 +50,8 @@ function ChallengePage() {
   const ttsUtterRef = useRef(null);
   const [ttsPlaying, setTtsPlaying] = useState(false);
 
+  // In new structure, level.words is [{word, translation, idx}]
+
   if (!supported) {
     return <div>Your browser does not support speech recognition.</div>;
   }
@@ -185,7 +187,13 @@ function ChallengePage() {
         <div className="challenge-page">
           <h2>Level {level.level} Test</h2>
           <div>
-            <b>Prompt {currentIdx + 1} of {totalWords}:</b> <span style={{ fontWeight: 600 }}>{level.words[currentIdx]}</span>
+            <b>Prompt {currentIdx + 1} of {totalWords}:</b>{" "}
+            <span style={{ fontWeight: 600, fontSize: "1.08em" }}>
+              {level.words[currentIdx]?.word}
+            </span>{" "}
+            <span style={{ color: "var(--secondary-color)", fontStyle: "italic", fontSize: "1em", marginLeft: 6 }}>
+              ({level.words[currentIdx]?.translation})
+            </span>
             <button
               onClick={handleSpeakPrompt}
               style={{ marginLeft: 10, fontSize: "0.95rem" }}
@@ -212,7 +220,7 @@ function ChallengePage() {
           </button>
           {!!userAttempts[currentIdx] && results[currentIdx] !== null && (
             <React.Fragment>
-              <AccuracySidebar target={level.words[currentIdx]} userInput={userAttempts[currentIdx]} score={results[currentIdx]} />
+              <AccuracySidebar target={level.words[currentIdx]?.word} userInput={userAttempts[currentIdx]} score={results[currentIdx]} />
               <div style={{ color: results[currentIdx] >= 75 ? "var(--accent-color)" : "var(--primary-color)", marginTop: 16, fontWeight: 600 }}>
                 {results[currentIdx] >= 75 ? "Correct!" : "Keep practicing!"}
               </div>
@@ -235,15 +243,19 @@ function ChallengePage() {
       <div className="challenge-page">
         <h2>Level {level.level} Test Review</h2>
         <ul style={{ fontSize: "1.1rem", listStyle: "none", padding: 0 }}>
-          {level.words.map((w, i) => (
-            <li key={w + i} style={{
+          {level.words.map((entry, i) => (
+            <li key={(entry.word || "") + "-" + i} style={{
               color: results[i] >= 75 ? "var(--accent-color)" : "var(--primary-color)",
               padding: "5px 0",
               display: "flex",
               alignItems: "center",
-              gap: "10px"
+              gap: "10px",
             }}>
-              <b>{i + 1}.</b> <span style={{ minWidth: 120 }}>{w}</span>
+              <b>{i + 1}.</b>
+              <span style={{ minWidth: 105, fontWeight: 600 }}>{entry.word}</span>
+              <span style={{ color: "#666", minWidth: 100, marginLeft: 6, fontStyle: "italic", fontWeight: 400 }}>
+                ({entry.translation})
+              </span>
               <span style={{
                 fontStyle: "italic",
                 marginLeft: 7,

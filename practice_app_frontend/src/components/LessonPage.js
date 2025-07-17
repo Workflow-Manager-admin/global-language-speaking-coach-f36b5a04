@@ -70,31 +70,43 @@ function LessonPage() {
           Go through each word. Listen and say it aloud to practice speaking.
         </p>
         <ul style={{ paddingLeft: 0, listStyle: "none", fontSize: "1.18rem" }}>
-          {level.words.map((word, idx) => (
+          {level.words.map((entry, idx) => (
             <li
-              key={word + idx}
+              key={(entry.word || "") + "-" + idx}
               style={{
                 marginBottom: 10,
                 background: "#eaf9fa",
                 display: "flex",
                 alignItems: "center",
                 padding: "7px 16px",
-                borderRadius: "4px"
+                borderRadius: "4px",
               }}
             >
-              <b style={{ minWidth: 48 }}>{idx + 1}.</b>
-              <span style={{ flex: 1 }}>{word}</span>
+              <b style={{ minWidth: 38 }}>{idx + 1}.</b>
+              <span style={{ flex: 2, fontWeight: 600 }}>
+                {entry.word}
+              </span>
+              <span style={{
+                flex: 2,
+                color: "var(--secondary-color)",
+                marginLeft: 8,
+                fontStyle: "italic",
+                fontWeight: 500,
+                fontSize: "0.99em"
+              }}>
+                {entry.translation ? `(${entry.translation})` : ""}
+              </span>
               <button
                 className="btn btn-accent"
                 style={{
-                  marginLeft: 14,
-                  padding: "2px 17px",
+                  marginLeft: 12,
+                  padding: "2px 14px",
                   fontSize: "0.97rem"
                 }}
                 title="Hear pronunciation"
                 onClick={async () => {
                   // Always use best Google voice for language, fallback to high quality native
-                  if (window.speechSynthesis && word) {
+                  if (window.speechSynthesis && entry.word) {
                     try {
                       window.speechSynthesis.cancel();
                     } catch {}
@@ -115,7 +127,7 @@ function LessonPage() {
                             vo.lang.toLowerCase() === speechLang.toLowerCase())
                       );
                     if (!v && voices.length > 0) v = voices[0];
-                    const ut = new window.SpeechSynthesisUtterance(word);
+                    const ut = new window.SpeechSynthesisUtterance(entry.word);
                     ut.lang = v?.lang || speechLang;
                     ut.rate = 1;
                     ut.pitch = 1.15;
@@ -134,7 +146,7 @@ function LessonPage() {
                 style={{
                   color: wordsReviewed[idx] ? "var(--accent-color)" : "#aaa",
                   fontWeight: 700,
-                  marginLeft: 12
+                  marginLeft: 10,
                 }}
               >
                 {wordsReviewed[idx] ? "✓" : ""}
