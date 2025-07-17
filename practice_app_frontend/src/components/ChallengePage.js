@@ -113,22 +113,36 @@ function ChallengePage() {
   };
 
   // Calculate similarity function
+  /**
+   * Calculates the similarity score between two phrases (expected and user's spoken input).
+   * Ensures 'expected' is always converted to a string to safely allow .trim() (defensive for translation/object types).
+   * @param {*} expected - the expected string/phrase (can be object/array/string)
+   * @param {*} userSpoken - user's spoken input (usually string)
+   * @returns {number} similarity score [0-100]
+   */
   function calcScore(expected, userSpoken) {
+    // Defensive: Always convert expected to string before .trim()
     if (!expected || !userSpoken) return 0;
-    let a = expected.trim().toLowerCase(),
-      b = userSpoken.trim().toLowerCase();
-    // Levenshtein, same as sidebar
-    const sa = a,
-      sb = b;
-    const matrix = Array(sb.length + 1)
-      .fill(null)
-      .map(() => []);
-    for (let i = 0; i <= sb.length; i++) {
-      matrix[i][0] = i;
+    let exp = expected;
+    // If expected is an object (e.g. translation pair), try to use .word property or JSON.stringify fallback
+    if (typeof exp === "object" && exp !== null) {
+      // Try to find a "word" field or "translation"
+      if (typeof exp.word === "string") exp = exp.word;
+      else if (typeof exp.translation === "string") exp = exp.translation;
+      else exp = JSON.stringify(exp);
     }
-    for (let j = 0; j <= sa.length; j++) {
-      matrix[0][j] = j;
-    }
+    // If expected is not string and not converted yet, force to string
+    if (typeof exp !== "string") exp = String(exp ?? "");
+    let usr = userSpoken;
+    if (typeof usr !== "string") usr = String(usr ?? "");
+    let a = exp.trim().toLowerCase(),
+        b = usr.trim().toLowerCase();
+
+    // Levenshtein as before
+    const sa = a, sb = b;
+    const matrix = Array(sb.length + 1).fill(null).map(() => []);
+    for (let i = 0; i <= sb.length; i++) { matrix[i][0] = i; }
+    for (let j = 0; j <= sa.length; j++) { matrix[0][j] = j; }
     for (let i = 1; i <= sb.length; i++) {
       for (let j = 1; j <= sa.length; j++) {
         const cost = sa[j - 1] === sb[i - 1] ? 0 : 1;
