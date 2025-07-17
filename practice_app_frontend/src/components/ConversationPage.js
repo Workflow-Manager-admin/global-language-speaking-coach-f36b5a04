@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useProgress } from "../context/ProgressContext";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import AccuracySidebar from "./AccuracySidebar";
+import SpeechOptionsDropdown from "./SpeechOptionsDropdown";
 import "../App.css";
 
 // PUBLIC_INTERFACE
@@ -25,90 +26,57 @@ function ConversationPage() {
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const ttsUtterRef = useRef(null);
 
-  // --- Helper: robustly select the best matching voice for the selected language code. Copied from LessonPage.js for consistency.
-  function pickBestVoiceForLanguage(langCode) {
-    if (!window.speechSynthesis) return { voice: null, lang: langCode, fallback: true };
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices || voices.length === 0) return { voice: null, lang: langCode, fallback: true };
-    // Step 1: Try for exact BCP47 match
-    let mainLang = langCode;
-    let exact = voices.find(v => v.lang && v.lang.toLowerCase() === langCode.toLowerCase());
-    if (exact) return { voice: exact, lang: exact.lang, fallback: false, voiceName: exact.name };
-    // Step 2: Prefix match
-    let prefix = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(mainLang.toLowerCase() + '-'));
-    if (prefix) return { voice: prefix, lang: prefix.lang, fallback: false, voiceName: prefix.name };
-    // Step 3: 2-letter lang code only
-    let justLang = voices.find(v => v.lang && v.lang.substr(0, 2).toLowerCase() === mainLang.toLowerCase());
-    if (justLang) return { voice: justLang, lang: justLang.lang, fallback: false, voiceName: justLang.name };
-    // Step 4: Fallback
-    return { voice: voices[0], lang: voices[0].lang, fallback: true, voiceName: voices[0].name };
-  }
-
+  // Speech options state (voice URI, rate, pitch)
+  let defaultLang = (window.localStorage.getItem("selectedLanguage") &&
+                     JSON.parse(window.localStorage.getItem("selectedLanguage")).code) || "en";
+  const [speechOpts, setSpeechOpts] = useState(() => {
+    const ctx = localStorage.getItem("speechOptions_" + defaultLang);
+    const last = localStorage.getItem("speechOptions_last");
+    if (ctx) return JSON.parse(ctx);
+    if (last) return JSON.parse(last);
+    return {voiceURI: "", rate: 1, pitch: 1};
+  });
   // Speak the AI message (e.g., on load and after user submits)
   useEffect(() => {
-    let fallbackTTS = false;
-    if (aiMessage && window.speechSynthesis && lesson?.example) {
-      let langCode =
-        (window.localStorage.getItem("selectedLanguage") &&
-          JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
-        "en";
-      const langMap = {
-        en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar",
-        ru: "ru", ko: "ko", pt: "pt"
-      };
-      langCode = langMap[langCode] || "en";
-      const { voice, lang, fallback } = pickBestVoiceForLanguage(langCode);
-      fallbackTTS = fallback;
-      const utt = new window.SpeechSynthesisUtterance(
-        `Let's practice. ${lesson.example}. Please say your answer!`
-      );
-      utt.lang = lang;
-      if (voice) utt.voice = voice;
-      ttsUtterRef.current = utt;
-      setTtsPlaying(true);
-      utt.onend = () => setTtsPlaying(false);
-      window.speechSynthesis.speak(utt);
-      if (fallback) {
-        setTimeout(() => {
-          window.alert(
-            "The selected language's voice was not found in your browser. Using the default voice instead. To improve speech synthesis, ensure system/browser support for this language."
-          );
-        }, 200);
-      }
-    }
+    if (!lesson?.example) return;
+    if (!window.speechSynthesis) return;
+    try { window.speechSynthesis.cancel(); } catch { }
+    // Which voice/rate/pitch?
+    const voices = window.speechSynthesis.getVoices() || [];
+    let v = voices.find(vo => vo.voiceURI === speechOpts.voiceURI);
+    if (!v) v = voices.find(vo => vo.lang && vo.lang.startsWith(defaultLang));
+    if (!v && voices.length > 0) v = voices[0];
+    const utt = new window.SpeechSynthesisUtterance(
+      `Let's practice. ${lesson.example}. Please say your answer!`
+    );
+    utt.lang = v?.lang || defaultLang;
+    if (v) utt.voice = v;
+    utt.rate = speechOpts.rate || 1;
+    utt.pitch = speechOpts.pitch || 1;
+    ttsUtterRef.current = utt;
+    setTtsPlaying(true);
+    utt.onend = () => setTtsPlaying(false);
+    window.speechSynthesis.speak(utt);
     return () => {
       try { window.speechSynthesis.cancel(); } catch {}
     };
     // eslint-disable-next-line
-  }, [aiMessage, lesson]);
+  }, [aiMessage, lesson, speechOpts, defaultLang]);
 
   // Allow AI to repeat the phrase/pronounce on demand
   const handlePronounceAgain = () => {
-    let fallback = false;
     if (window.speechSynthesis && lesson?.example) {
       try { window.speechSynthesis.cancel(); } catch { }
-      let langCode =
-        (window.localStorage.getItem("selectedLanguage") &&
-        JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
-        "en";
-      const langMap = {
-        en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar",
-        ru: "ru", ko: "ko", pt: "pt"
-      };
-      langCode = langMap[langCode] || "en";
-      const { voice, lang, fallback: fallbackInner } = pickBestVoiceForLanguage(langCode);
-      fallback = fallbackInner;
+      const voices = window.speechSynthesis.getVoices() || [];
+      let v = voices.find(vo => vo.voiceURI === speechOpts.voiceURI);
+      if (!v) v = voices.find(vo => vo.lang && vo.lang.startsWith(defaultLang));
+      if (!v && voices.length > 0) v = voices[0];
       const utt = new window.SpeechSynthesisUtterance(lesson.example);
-      utt.lang = lang;
-      if (voice) utt.voice = voice;
+      utt.lang = v?.lang || defaultLang;
+      utt.rate = speechOpts.rate || 1;
+      utt.pitch = speechOpts.pitch || 1;
+      if (v) utt.voice = v;
       window.speechSynthesis.speak(utt);
-      if (fallback) {
-        setTimeout(() => {
-          window.alert(
-            "The selected language's voice was not found in your browser. Using the default voice instead. To improve speech synthesis, ensure system/browser support for this language."
-          );
-        }, 200);
-      }
     }
   };
 
@@ -116,34 +84,19 @@ function ConversationPage() {
   const handleSend = () => {
     setUserMessage(transcript);
     setTimeout(() => {
-      // Simulated spoken feedback in correct language
-      let fallback = false;
-      if (window.speechSynthesis) {
-        let langCode =
-          (window.localStorage.getItem("selectedLanguage") &&
-            JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
-          "en";
-        const langMap = {
-          en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar",
-          ru: "ru", ko: "ko", pt: "pt"
-        };
-        langCode = langMap[langCode] || "en";
-        const { voice, lang, fallback: fallbackInner } = pickBestVoiceForLanguage(langCode);
-        fallback = fallbackInner;
-        const utt = new window.SpeechSynthesisUtterance(
-          "Well done! Try to use a more complete sentence next time."
-        );
-        utt.lang = lang;
-        if (voice) utt.voice = voice;
-        window.speechSynthesis.speak(utt);
-        if (fallback) {
-          setTimeout(() => {
-            window.alert(
-              "The selected language's voice was not found in your browser. Using the default voice instead. To improve speech synthesis, ensure system/browser support for this language."
-            );
-          }, 200);
-        }
-      }
+      if (!window.speechSynthesis) return;
+      const voices = window.speechSynthesis.getVoices() || [];
+      let v = voices.find(vo => vo.voiceURI === speechOpts.voiceURI);
+      if (!v) v = voices.find(vo => vo.lang && vo.lang.startsWith(defaultLang));
+      if (!v && voices.length > 0) v = voices[0];
+      const utt = new window.SpeechSynthesisUtterance(
+        "Well done! Try to use a more complete sentence next time."
+      );
+      utt.lang = v?.lang || defaultLang;
+      if (v) utt.voice = v;
+      utt.rate = speechOpts.rate || 1;
+      utt.pitch = speechOpts.pitch || 1;
+      window.speechSynthesis.speak(utt);
       alert("AI feedback: Well done! Try to use a more complete sentence next time.");
     }, 400);
   };
@@ -156,6 +109,11 @@ function ConversationPage() {
     <div style={{position: "relative", minHeight: 430}}>
       <div className="conversation-page">
         <h2>AI-Powered Voice Practice</h2>
+        <SpeechOptionsDropdown
+          languageCode={defaultLang}
+          contextLabel="Conversation"
+          onChange={setSpeechOpts}
+        />
         <div className="conversation-box">
           <div className="ai-message">
             {aiMessage}

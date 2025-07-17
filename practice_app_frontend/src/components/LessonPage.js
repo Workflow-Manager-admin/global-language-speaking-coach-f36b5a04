@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProgress } from "../context/ProgressContext";
+import SpeechOptionsDropdown from "./SpeechOptionsDropdown";
 import "../App.css";
 
 // PUBLIC_INTERFACE
@@ -17,6 +18,18 @@ function LessonPage() {
 
   const [wordsReviewed, setWordsReviewed] = useState(Array(level?.words.length || 0).fill(false));
   const [isMarkedPractice, setIsMarkedPractice] = useState(!!level?.practiceComplete);
+
+  // Speech options state (voice URI, rate, pitch)
+  let defaultLang = (window.localStorage.getItem("selectedLanguage") &&
+                     JSON.parse(window.localStorage.getItem("selectedLanguage")).code) || "en";
+  const [speechOpts, setSpeechOpts] = useState(() => {
+    // Try to load context-specific, else generic last used
+    const ctx = localStorage.getItem("speechOptions_" + defaultLang);
+    const last = localStorage.getItem("speechOptions_last");
+    if (ctx) return JSON.parse(ctx);
+    if (last) return JSON.parse(last);
+    return {voiceURI: "", rate: 1, pitch: 1};
+  });
 
   if (!level) return <div>Lesson not found</div>;
 
@@ -59,6 +72,12 @@ function LessonPage() {
     <div style={{ position: "relative", minHeight: 330 }}>
       <div className="lesson-page">
         <h2>Level {level.level}: Practice Words</h2>
+        {/* Voice picker for lesson context */}
+        <SpeechOptionsDropdown
+          languageCode={defaultLang}
+          contextLabel="Lesson"
+          onChange={setSpeechOpts}
+        />
         <p>Go through each word. Listen and say it aloud to practice speaking.</p>
         <ul style={{ paddingLeft: 0, listStyle: "none", fontSize: "1.18rem" }}>
           {level.words.map((word, idx) => (
@@ -77,51 +96,30 @@ function LessonPage() {
                 style={{ marginLeft: 14, padding: "2px 17px", fontSize: "0.97rem" }}
                 title="Hear pronunciation"
                 onClick={async () => {
+                  // Use selected voice, rate, pitch
                   let fallback = false;
                   let chosenVoiceName = "";
                   if (window.speechSynthesis && word) {
                     try { window.speechSynthesis.cancel(); } catch { }
-                    let langCode =
-                      (window.localStorage.getItem("selectedLanguage") &&
-                      JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
-                      "en";
-                    // Map language code (in reality, passed through from selector)
-                    const langMap = {
-                      en: "en",
-                      es: "es",
-                      fr: "fr",
-                      de: "de",
-                      zh: "zh",
-                      ja: "ja",
-                      ar: "ar",
-                      ru: "ru",
-                      ko: "ko",
-                      pt: "pt",
-                    };
-                    langCode = langMap[langCode] || "en";
-                    // Use robust matching function
-                    const { voice, lang, fallback: fb, voiceName } = pickBestVoiceForLanguage(langCode);
-                    fallback = fb;
-                    chosenVoiceName = voiceName;
-                    const ut = new window.SpeechSynthesisUtterance(word);
-                    ut.lang = lang || langCode;
-                    if (voice) {
-                      ut.voice = voice;
+                    // Extract stored options, or fallback
+                    const voices = window.speechSynthesis.getVoices() || [];
+                    let v = voices.find(vo => vo.voiceURI === speechOpts.voiceURI);
+                    // If saved voice URI doesn't match, try to guess as before
+                    if (!v) {
+                      v = voices.find(vo => vo.lang && vo.lang.startsWith(defaultLang));
                     }
+                    if (!v && voices.length > 0) v = voices[0];
+                    const ut = new window.SpeechSynthesisUtterance(word);
+                    ut.lang = v?.lang || defaultLang;
+                    ut.rate = speechOpts.rate || 1;
+                    ut.pitch = speechOpts.pitch || 1;
+                    if (v) ut.voice = v;
                     window.speechSynthesis.speak(ut);
                   }
                   // Mark this word as reviewed
                   setWordsReviewed(wr =>
                     wr.map((val, i) => (i === idx ? true : val))
                   );
-                  // If no good match, alert/fallback - show visible notification
-                  if (fallback) {
-                    setTimeout(() => {
-                      window.alert(
-                        "The selected language's voice was not found in your browser. Using the default voice instead. To improve speech synthesis, ensure system/browser support for this language."
-                      );
-                    }, 200);
-                  }
                 }}
               >
                 🔊
