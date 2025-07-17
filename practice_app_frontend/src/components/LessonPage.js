@@ -56,17 +56,61 @@ function LessonPage() {
                 className="btn btn-accent"
                 style={{ marginLeft: 14, padding: "2px 17px", fontSize: "0.97rem" }}
                 title="Hear pronunciation"
-                onClick={() => {
+                onClick={async () => {
+                  let fallback = false;
+                  let chosenVoiceName = "";
                   if (window.speechSynthesis && word) {
                     try { window.speechSynthesis.cancel(); } catch { }
+                    let langCode =
+                      (window.localStorage.getItem("selectedLanguage") &&
+                      JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
+                      "en";
+                    // Map language code if needed for speech
+                    const langMap = {
+                      en: "en",
+                      es: "es",
+                      fr: "fr",
+                      de: "de",
+                      zh: "zh",
+                      ja: "ja",
+                      ar: "ar",
+                      ru: "ru",
+                      ko: "ko",
+                      pt: "pt",
+                    };
+                    langCode = langMap[langCode] || "en";
+                    const voices = window.speechSynthesis.getVoices();
+                    // Try multiple matching methods
+                    let voice =
+                      voices.find((v) => v.lang && v.lang.substr(0, 2) === langCode) ||
+                      voices.find((v) => v.lang && v.lang.toLowerCase().includes(langCode + "-")) ||
+                      voices.find((v) => v.lang && v.lang.toLowerCase().includes(langCode)) ||
+                      null;
+                    if (!voice && voices.length > 0) {
+                      // fallback to first voice
+                      fallback = true;
+                      voice = voices[0];
+                    }
                     const ut = new window.SpeechSynthesisUtterance(word);
-                    ut.lang = "en-US";
+                    ut.lang = voice?.lang || langCode;
+                    if (voice) {
+                      ut.voice = voice;
+                      chosenVoiceName = voice.name || "";
+                    }
                     window.speechSynthesis.speak(ut);
                   }
                   // Mark this word as reviewed
                   setWordsReviewed(wr =>
                     wr.map((val, i) => (i === idx ? true : val))
                   );
+                  // If no good match, alert/fallback - show visible notification
+                  if (fallback) {
+                    setTimeout(() => {
+                      window.alert(
+                        "The selected language's voice was not found in your browser. Using the default voice instead. To improve speech synthesis, ensure system/browser support for this language."
+                      );
+                    }, 200);
+                  }
                 }}
               >
                 🔊

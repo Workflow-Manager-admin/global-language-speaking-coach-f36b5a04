@@ -25,17 +25,53 @@ function ConversationPage() {
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const ttsUtterRef = useRef(null);
 
+  // --- Helper: find matching browser voice for selected language ---
+  const pickVoiceAndLang = () => {
+    let fallback = false;
+    let langCode =
+      (window.localStorage.getItem("selectedLanguage") &&
+        JSON.parse(window.localStorage.getItem("selectedLanguage")).code) ||
+      "en";
+    const langMap = {
+      en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar",
+      ru: "ru", ko: "ko", pt: "pt"
+    };
+    langCode = langMap[langCode] || "en";
+    const voices = window.speechSynthesis.getVoices();
+    let voice =
+      voices.find((v) => v.lang && v.lang.substr(0, 2) === langCode) ||
+      voices.find((v) => v.lang && v.lang.toLowerCase().includes(langCode + "-")) ||
+      voices.find((v) => v.lang && v.lang.toLowerCase().includes(langCode)) ||
+      null;
+    if (!voice && voices.length > 0) {
+      fallback = true;
+      voice = voices[0];
+    }
+    return { voice, lang: voice?.lang || langCode, fallback, voiceName: voice?.name || "" };
+  };
+
   // Speak the AI message (e.g., on load and after user submits)
   useEffect(() => {
+    let fallbackTTS = false;
     if (aiMessage && window.speechSynthesis && lesson?.example) {
+      const { voice, lang, fallback } = pickVoiceAndLang();
+      fallbackTTS = fallback;
       const utt = new window.SpeechSynthesisUtterance(
         `Let's practice. ${lesson.example}. Please say your answer!`
       );
-      utt.lang = "en-US";
+      utt.lang = lang;
+      if (voice) utt.voice = voice;
       ttsUtterRef.current = utt;
       setTtsPlaying(true);
       utt.onend = () => setTtsPlaying(false);
       window.speechSynthesis.speak(utt);
+      if (fallback) {
+        setTimeout(() => {
+          window.alert(
+            "The selected language's voice was not found in your browser. Using the default voice instead. To improve speech synthesis, ensure system/browser support for this language."
+          );
+        }, 200);
+      }
     }
     return () => {
       try { window.speechSynthesis.cancel(); } catch {}
@@ -45,11 +81,22 @@ function ConversationPage() {
 
   // Allow AI to repeat the phrase/pronounce on demand
   const handlePronounceAgain = () => {
+    let fallback = false;
     if (window.speechSynthesis && lesson?.example) {
       try { window.speechSynthesis.cancel(); } catch { }
+      const { voice, lang, fallback: fallbackInner } = pickVoiceAndLang();
+      fallback = fallbackInner;
       const utt = new window.SpeechSynthesisUtterance(lesson.example);
-      utt.lang = "en-US";
+      utt.lang = lang;
+      if (voice) utt.voice = voice;
       window.speechSynthesis.speak(utt);
+      if (fallback) {
+        setTimeout(() => {
+          window.alert(
+            "The selected language's voice was not found in your browser. Using the default voice instead. To improve speech synthesis, ensure system/browser support for this language."
+          );
+        }, 200);
+      }
     }
   };
 
@@ -57,13 +104,24 @@ function ConversationPage() {
   const handleSend = () => {
     setUserMessage(transcript);
     setTimeout(() => {
-      // Simulated spoken feedback
+      // Simulated spoken feedback in correct language
+      let fallback = false;
       if (window.speechSynthesis) {
+        const { voice, lang, fallback: fallbackInner } = pickVoiceAndLang();
+        fallback = fallbackInner;
         const utt = new window.SpeechSynthesisUtterance(
           "Well done! Try to use a more complete sentence next time."
         );
-        utt.lang = "en-US";
+        utt.lang = lang;
+        if (voice) utt.voice = voice;
         window.speechSynthesis.speak(utt);
+        if (fallback) {
+          setTimeout(() => {
+            window.alert(
+              "The selected language's voice was not found in your browser. Using the default voice instead. To improve speech synthesis, ensure system/browser support for this language."
+            );
+          }, 200);
+        }
       }
       alert("AI feedback: Well done! Try to use a more complete sentence next time.");
     }, 400);
