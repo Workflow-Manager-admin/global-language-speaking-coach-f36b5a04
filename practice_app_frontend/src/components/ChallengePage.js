@@ -55,13 +55,36 @@ function ChallengePage() {
       </div>
     );
 
-  // Handle TTS for current word
+  // Handle TTS for current word (AI pronunciation)
   const handleSpeakPrompt = () => {
     const prompt = level.words[currentIdx];
     if (window.speechSynthesis && prompt) {
       try { window.speechSynthesis.cancel(); } catch { }
+      // Use selected language if set
+      let selectedLangObj =
+        window.localStorage.getItem("selectedLanguage") &&
+        JSON.parse(window.localStorage.getItem("selectedLanguage"));
+      let defaultLang = (selectedLangObj && selectedLangObj.code) || "en";
+      const voices = window.speechSynthesis.getVoices() || [];
+      // Prefer Google-branded voice for language
+      let v = voices.find(
+        vo =>
+          vo.lang &&
+          vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase()) &&
+          (vo.name && /google/i.test(vo.name) || vo.voiceURI && /google/i.test(vo.voiceURI))
+      );
+      // Native fallback matching language
+      if (!v) {
+        v = voices.find(
+          vo => vo.lang && vo.lang.toLowerCase().startsWith(defaultLang.toLowerCase())
+        );
+      }
+      if (!v && voices.length > 0) v = voices[0];
       const utt = new window.SpeechSynthesisUtterance(prompt);
-      utt.lang = "en-US";
+      utt.lang = v?.lang || defaultLang;
+      utt.rate = 1;
+      utt.pitch = 1.15;
+      if (v) utt.voice = v;
       ttsUtterRef.current = utt;
       setTtsPlaying(true);
       utt.onend = () => setTtsPlaying(false);

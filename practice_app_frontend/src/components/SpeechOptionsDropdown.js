@@ -1,143 +1,63 @@
-import React, { useEffect, useState } from "react";
-
-// PUBLIC_INTERFACE
 /**
- * SpeechOptionsDropdown
- * Allows the user to preview/select a speech synthesis voice, rate, and pitch for the current language.
- * Remembers choice in localStorage. Works for any context where speech synthesis is used.
- * 
- * Props:
- *   languageCode: (string) BCP-47 language code (e.g., "en", "es", "fr").
- *   onChange: (function) called with {voiceURI, rate, pitch} when changed.
- *   contextLabel: (string) for UI, e.g., "Lesson" or "Conversation"
+ * Stub SpeechOptionsDropdown. (Removed UI, always chooses the best Google or native voice
+ * matching languageCode, rate=1, pitch=1.15. Not interactive.)
+ * Notifies onChange({voiceURI, rate, pitch}) after mounting.
  */
-function SpeechOptionsDropdown({ languageCode, onChange, contextLabel = "" }) {
-  const [voices, setVoices] = useState([]);
-  const [voiceURI, setVoiceURI] = useState("");
-  const [rate, setRate] = useState(1);
-  const [pitch, setPitch] = useState(1);
-  const [loading, setLoading] = useState(true);
+import { useEffect } from "react";
 
-  // Load voices (async on some browsers)
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-
-    function load() {
-      const allVoices = window.speechSynthesis?.getVoices() || [];
-      // Prioritize: 1. Exact language, 2. Same language prefix, 3. Any
-      let filtered = allVoices.filter(v =>
-        v.lang.toLowerCase().startsWith(languageCode.toLowerCase())
-      );
-      if (filtered.length === 0) filtered = allVoices;
-      if (mounted) {
-        setVoices(filtered);
-        setLoading(false);
-        // Auto-select current from localStorage, else best match
-        const saved = localStorage.getItem("speechOptions_" + languageCode);
-        if (saved) {
-          const opts = JSON.parse(saved);
-          setVoiceURI(opts.voiceURI);
-          setRate(opts.rate || 1);
-          setPitch(opts.pitch || 1);
-        } else if (filtered.length > 0) {
-          setVoiceURI(filtered[0].voiceURI);
-        }
-      }
-    }
-    if (window.speechSynthesis?.onvoiceschanged !== undefined) {
-      window.speechSynthesis.onvoiceschanged = load;
-    }
-    load();
-    return () => { mounted = false; };
-  }, [languageCode]);
-
-  useEffect(() => {
-    // Save settings and notify parent
-    const opts = {voiceURI, rate, pitch};
-    localStorage.setItem("speechOptions_" + languageCode, JSON.stringify(opts));
-    if (onChange) onChange(opts);
-    // Also track in global (for all contexts)
-    localStorage.setItem("speechOptions_last", JSON.stringify({
-      ...opts, languageCode
-    }));
-  }, [voiceURI, rate, pitch, languageCode, onChange]);
-
-  function preview() {
-    if (!voiceURI) return;
-    const v = voices.find(v => v.voiceURI === voiceURI);
-    const utt = new window.SpeechSynthesisUtterance(
-      `This is a preview. ${contextLabel ? `(${contextLabel})` : ""}`
-    );
-    utt.lang = v?.lang || languageCode;
-    utt.rate = rate;
-    utt.pitch = pitch;
-    if (v) utt.voice = v;
-    window.speechSynthesis.speak(utt);
-  }
-
-  return (
-    <div style={{margin: "10px 0 20px 0"}}>
-      <div style={{fontWeight: 600, marginBottom: 6}}>
-        Voice & Pronunciation Options {contextLabel && <span>({contextLabel})</span>}
-      </div>
-      {loading ? <div>Loading voices...</div> : (
-        <div style={{display:"flex", flexDirection:"column", gap: "9px"}}>
-          <div>
-            <label>
-              <span style={{minWidth: 70, display:"inline-block"}}>Voice: </span>
-              <select
-                value={voiceURI}
-                onChange={e => setVoiceURI(e.target.value)}
-                style={{ minWidth: 180, fontSize: "1.06rem" }}
-              >
-                {voices.map(v => (
-                  <option
-                    value={v.voiceURI}
-                    key={v.voiceURI}
-                  >{v.name} ({v.lang}){v.default ? " [default]" : ""}</option>
-                ))}
-              </select>
-              <button
-                className="btn btn-accent"
-                onClick={preview}
-                style={{marginLeft:8, fontSize:"0.9rem", padding:"3px 15px"}}
-                type="button"
-              >Preview</button>
-            </label>
-          </div>
-          <div>
-            <label>
-              <span style={{minWidth: 70, display:"inline-block"}}>Rate: </span>
-              <input
-                type="range"
-                min="0.7"
-                max="1.5"
-                step="0.01"
-                value={rate}
-                onChange={e => setRate(parseFloat(e.target.value))}
-                style={{verticalAlign:"middle"}}
-              />{" "}{rate}
-            </label>
-          </div>
-          <div>
-            <label>
-              <span style={{minWidth: 70, display:"inline-block"}}>Pitch: </span>
-              <input
-                type="range"
-                min="0.6"
-                max="1.5"
-                step="0.01"
-                value={pitch}
-                onChange={e => setPitch(parseFloat(e.target.value))}
-                style={{verticalAlign:"middle"}}
-              />{" "}{pitch}
-            </label>
-          </div>
-        </div>
-      )}
-    </div>
+// A utility: Find best Google-branded voice for the language, else a native voice fallback; always use rate=1, pitch=1.15
+function findBestSpeechSynthesisVoice(languageCode) {
+  if (!window.speechSynthesis) return { voice: null, voiceURI: "", lang: languageCode, fallback: true };
+  const voices = window.speechSynthesis.getVoices() || [];
+  // Try Google voice ideally
+  const googleVoices = voices.filter(
+    v =>
+      v.lang &&
+      v.lang.toLowerCase().startsWith(languageCode.toLowerCase()) &&
+      v.name &&
+      (/google/i.test(v.name) || /google/i.test(v.voiceURI))
   );
+  if (googleVoices.length > 0)
+    return { voice: googleVoices[0], voiceURI: googleVoices[0].voiceURI, lang: googleVoices[0].lang, fallback: false };
+  // Try native voices matching language (by lang prefix)
+  const langVoices = voices.filter(v =>
+    v.lang && v.lang.toLowerCase().startsWith(languageCode.toLowerCase())
+  );
+  if (langVoices.length > 0)
+    return { voice: langVoices[0], voiceURI: langVoices[0].voiceURI, lang: langVoices[0].lang, fallback: true };
+  // Otherwise, just use the browser's default
+  if (voices.length > 0)
+    return { voice: voices[0], voiceURI: voices[0].voiceURI, lang: voices[0].lang, fallback: true };
+  return { voice: null, voiceURI: "", lang: languageCode, fallback: true };
+}
+
+/**
+ * Only purpose is to call onChange once on load with ({voiceURI, rate, pitch})
+ */
+function SpeechOptionsDropdown({ languageCode, onChange }) {
+  useEffect(() => {
+    // Wait for voices to load. Call onChange with the best Google or native voice, rate=1, pitch=1.15
+    let timeout = setTimeout(() => {
+      if (!window.speechSynthesis) {
+        if (onChange) onChange({ voiceURI: "", rate: 1, pitch: 1.15 });
+        return;
+      }
+      // Wait for voices, which may be async after page load
+      function setNotify() {
+        const chosen = findBestSpeechSynthesisVoice(languageCode);
+        if (onChange) onChange({ voiceURI: chosen.voiceURI, rate: 1, pitch: 1.15 }); // always these settings
+      }
+      window.speechSynthesis.onvoiceschanged = setNotify;
+      setNotify();
+    }, 100);
+    return () => {
+      clearTimeout(timeout);
+      window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [languageCode, onChange]);
+
+  // Invisible stub; no UI.
+  return null;
 }
 
 export default SpeechOptionsDropdown;
