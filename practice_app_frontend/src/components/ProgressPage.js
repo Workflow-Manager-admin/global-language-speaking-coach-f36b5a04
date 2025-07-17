@@ -4,24 +4,34 @@ import "../App.css";
 
 // PUBLIC_INTERFACE
 function ProgressPage() {
-  const { stats, lessons } = useProgress();
+  const { levels, stats } = useProgress();
 
   return (
     <div className="progress-page">
       <h2>My Progress</h2>
       <div className="progress-stats">
-        <div><b>Level:</b> {stats.level}</div>
-        <div><b>Lessons Completed:</b> {stats.lessonsCompleted}</div>
-        <div><b>Speaking Challenges Completed:</b> {stats.challengesCompleted}</div>
+        <div><b>Level Reached:</b> {stats.level}</div>
+        <div><b>Levels Completed:</b> {stats.completed} / {stats.totalLevels}</div>
         <progress max="100" value={stats.progressPercent}>{stats.progressPercent}%</progress>
         <div><b>Overall:</b> {stats.progressPercent}%</div>
       </div>
       <div className="progress-lessons">
-        <h3>Lesson History</h3>
+        <h3>Level History</h3>
         <ul>
-          {lessons.filter(l => l.completed).map(l =>
-            <li key={l.level}>Lesson {l.level}: {l.title} ✅</li>
-          )}
+          {levels.map(l => (
+            <li key={l.level}>
+              Level {l.level}:&nbsp;
+              <span>
+                {(l.practiceComplete ? "🗸 Practice" : "⏳ Practice")}
+                &nbsp;|&nbsp;
+                {l.testScore ?
+                  (l.testScore.passed ? `✅ Test (${l.testScore.score}%)`
+                    : `❌ Test (${l.testScore.score}%)`)
+                  : "⏳ Test"
+                }
+              </span>
+            </li>
+          ))}
         </ul>
       </div>
     </div>
