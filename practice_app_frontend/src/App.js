@@ -1,49 +1,75 @@
-import React, { useState, useEffect } from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useState, useEffect, createContext } from "react";
+import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
+import "./App.css";
+import "./index.css";
+
+import AuthPage from "./components/AuthPage";
+import Dashboard from "./components/Dashboard";
+import LanguageSelector from "./components/LanguageSelector";
+import LessonPage from "./components/LessonPage";
+import ConversationPage from "./components/ConversationPage";
+import ChallengePage from "./components/ChallengePage";
+import ProgressPage from "./components/ProgressPage";
+import Header from "./components/Header";
+import SideNav from "./components/SideNav";
+
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ProgressProvider } from "./context/ProgressContext";
+
+// Theme colors from requirements
+const THEME_COLORS = {
+  '--accent-color': '#34c759',
+  '--primary-color': '#0052cc',
+  '--secondary-color': '#0c4c73',
+};
+Object.entries(THEME_COLORS).forEach(([key, value]) => {
+  document.documentElement.style.setProperty(key, value);
+});
 
 // PUBLIC_INTERFACE
 function App() {
-  const [theme, setTheme] = useState('light');
+  // Theme switching hook (light only per requirements, but structure allows extension)
+  const [theme] = useState("light");
 
-  // Effect to apply theme to document element
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  // PUBLIC_INTERFACE
-  const toggleTheme = () => {
-    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
-  };
-
   return (
-    <div className="App">
-      <header className="App-header">
-        <button 
-          className="theme-toggle" 
-          onClick={toggleTheme}
-          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
-        >
-          {theme === 'light' ? '🌙 Dark' : '☀️ Light'}
-        </button>
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <p>
-          Current theme: <strong>{theme}</strong>
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <AuthProvider>
+      <ProgressProvider>
+        <Router>
+          <div className="app-root">
+            <Header />
+            <div className="main-layout">
+              <SideNav />
+              <main className="main-content">
+                <Routes>
+                  <Route path="/login" element={<AuthPage />} />
+                  <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+                  <Route path="/language" element={<RequireAuth><LanguageSelector /></RequireAuth>} />
+                  <Route path="/lesson/:levelId" element={<RequireAuth><LessonPage /></RequireAuth>} />
+                  <Route path="/conversation/:levelId" element={<RequireAuth><ConversationPage /></RequireAuth>} />
+                  <Route path="/challenge/:levelId" element={<RequireAuth><ChallengePage /></RequireAuth>} />
+                  <Route path="/progress" element={<RequireAuth><ProgressPage /></RequireAuth>} />
+                  <Route path="*" element={<Navigate replace to="/dashboard" />} />
+                </Routes>
+              </main>
+            </div>
+          </div>
+        </Router>
+      </ProgressProvider>
+    </AuthProvider>
   );
+}
+
+// PUBLIC_INTERFACE
+function RequireAuth({ children }) {
+  const { user } = useAuth();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
 }
 
 export default App;

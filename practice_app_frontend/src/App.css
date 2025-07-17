@@ -1,104 +1,304 @@
-/* CSS Variables for Theme Management */
+/* --- THEME SET --- */
 :root {
-  /* Light theme colors */
-  --bg-primary: #ffffff;
+  --primary-color: #0052cc;
+  --secondary-color: #0c4c73;
+  --accent-color: #34c759;
+
+  --bg-primary: #fff;
   --bg-secondary: #f8f9fa;
-  --text-primary: #282c34;
-  --text-secondary: #61dafb;
-  --border-color: #e9ecef;
-  --button-bg: #007bff;
-  --button-text: #ffffff;
+  --sidenav-bg: #f3f5f9;
+  --content-bg: #fff;
+  --header-bg: #eaf3fb;
+  --text-main: #222;
+  --text-muted: #405;
+  --border: #e6e8ef;
 }
 
-[data-theme="dark"] {
-  /* Dark theme colors */
-  --bg-primary: #1a1a1a;
-  --bg-secondary: #282c34;
-  --text-primary: #ffffff;
-  --text-secondary: #61dafb;
-  --border-color: #404040;
-  --button-bg: #0056b3;
-  --button-text: #ffffff;
+[data-theme='light'] {
+  --bg-primary: #fff;
+  --bg-secondary: #f8f9fa;
+  --sidenav-bg: #f3f5f9;
+  --content-bg: #fff;
+  --header-bg: #eaf3fb;
+  --text-main: #222;
+  --text-muted: #546;
+
+  --primary-color: #0052cc;
+  --secondary-color: #0c4c73;
+  --accent-color: #34c759;
 }
 
-.App {
-  text-align: center;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  min-height: 100vh;
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: var(--bg-secondary);
-  min-height: 100vh;
+/* Layout */
+.app-root {
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+.header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: var(--text-primary);
-  transition: background-color 0.3s ease;
-  position: relative;
+  background: var(--header-bg);
+  padding: 16px 32px 8px 32px;
+  color: var(--secondary-color);
+  box-shadow: 0 2px 6px 0 rgba(36,52,75,0.05);
 }
 
-.App-link {
-  color: var(--text-secondary);
-  transition: color 0.3s ease;
+.header-title h1 {
+  font-size: 1.6rem;
+  margin: 0;
+  color: var(--primary-color);
+  letter-spacing: 1px;
+  font-weight: 700;
 }
-
-.theme-toggle {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background-color: var(--button-bg);
-  color: var(--button-text);
-  border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 14px;
+.header-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.profile-icon {
+  background: var(--accent-color);
+  color: white;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+}
+.profile-name {
   font-weight: 600;
+  color: var(--secondary-color);
+}
+.header-logout {
+  background: none;
+  border: none;
+  color: var(--primary-color);
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  font-weight: 500;
+}
+.header-notify {
+  font-size: 1.2rem;
 }
 
-.theme-toggle:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-  opacity: 0.9;
+/* Sidenav */
+.main-layout {
+  display: flex;
+  flex: 1;
+  min-height: 700px;
+}
+.sidenav {
+  background: var(--sidenav-bg);
+  min-width: 180px;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border-right: 1px solid var(--border);
+}
+.sidenav a, .sidenav .active {
+  text-decoration: none;
+  color: var(--secondary-color);
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background .2s;
+}
+.sidenav .active,
+.sidenav a.active {
+  background: var(--accent-color);
+  color: white;
+}
+.sidenav a:hover {
+  background: var(--primary-color);
+  color: #fff;
+}
+.main-content {
+  padding: 36px 28px;
+  width: 100%;
+  background: var(--content-bg);
 }
 
-.theme-toggle:active {
-  transform: translateY(0);
+.auth-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 84vh;
+  background: var(--bg-secondary);
+}
+.auth-card {
+  background: #fff;
+  padding: 42px 32px;
+  border-radius: 12px;
+  box-shadow: 0 3px 26px 0 rgba(50,70,130,.14);
+  min-width: 320px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.auth-card h2 { margin: 0 0 12px 0; color: var(--primary-color); }
+.auth-card input {
+  width: 100%;
+  padding: 10px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 16px;
+  margin-bottom: 12px;
+}
+.auth-error { color: #d23c37; margin-bottom: 6px; }
+.btn-link {
+  background: none;
+  color: var(--accent-color);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: underline;
+  padding: 0;
+}
+.btn-link:hover { color: var(--primary-color); }
+
+.btn, .btn-accent, .btn-primary {
+  padding: 10px 24px;
+  border-radius: 7px;
+  border: none;
+  font-size: 1.02rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin: 6px 0;
+  transition: background .2s, color .2s;
+  background: var(--primary-color);
+  color: #fff;
+}
+.btn-accent { background: var(--accent-color); color: #fff; }
+.btn-accent:hover { background: #26a350;}
+.btn-primary { background: var(--secondary-color);}
+.btn-primary:hover { background: var(--primary-color);}
+.btn:disabled { opacity: .7; cursor: not-allowed; }
+
+.dashboard-container {
+  margin: 36px auto;
+  max-width: 640px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 32px 24px;
+}
+.dashboard-cards {
+  display: flex;
+  gap: 16px;
+  margin-top: 30px;
+  flex-wrap: wrap;
+}
+.dashboard-card {
+  flex: 1 1 140px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px 10px;
+  box-shadow: 0 1px 8px 0 rgba(41,61,120,0.07);
+  color: var(--primary-color);
+  font-size: 1.1rem;
+  text-align: center;
+}
+.dashboard-progress { min-width: 120px;}
+.dashboard-card progress {
+  width: 84%;
+  margin-top: 12px;
+  accent-color: var(--accent-color);
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.language-selector-page {
+  max-width: 500px;
+  margin: 24px auto;
+  padding: 30px 15px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  text-align: center;
+}
+.language-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 18px;
+  justify-content: center;
+}
+.language-list .btn.selected {
+  border: 2px solid var(--accent-color);
+  background: #e8fbe9;
+  color: var(--primary-color);
 }
 
-/* Responsive design for mobile */
-@media (max-width: 768px) {
-  .theme-toggle {
-    top: 10px;
-    right: 10px;
-    padding: 8px 16px;
-    font-size: 12px;
-  }
+.lesson-page, .conversation-page, .challenge-page, .progress-page {
+  max-width: 540px;
+  margin: 0 auto;
+  background: #f4f8fc;
+  border-radius: 8px;
+  padding: 36px 20px;
+  box-shadow: 0 1px 10px 2px rgba(42,72,111,.07);
+}
+.lesson-example {
+  margin: 18px 0 24px 0;
+  color: var(--secondary-color);
+  font-size: 1.14rem;
+  background: #eaf9fa;
+  padding: 13px 20px;
+  border-radius: 7px;
+}
+.conversation-box {
+  background: #ffffff;
+  border-radius: 9px;
+  box-shadow: 0 0 8px 0 rgba(28,44,80,.05);
+  padding: 24px 15px;
+  text-align: left;
+}
+.ai-message {
+  background: #eaf9fa;
+  color: var(--secondary-color);
+  padding: 10px 15px;
+  border-radius: 6px;
+  margin-bottom: 13px;
+  font-weight: 600;
+}
+.user-message, .user-challenge {
+  background: #f5f9ff;
+  border-radius: 6px;
+  margin-top: 14px;
+  padding: 13px 8px;
+}
+.user-transcript {
+  margin: 7px 0 0 0;
+  color: #232;
+  font-size: 1.09rem;
+}
+.listening {
+  border: 2px solid var(--accent-color) !important;
+  background: #fafbe8 !important;
+  color: var(--primary-color) !important;
+}
+.challenge-pass { color: var(--accent-color); margin-top: 20px;}
+.challenge-fail { color: var(--primary-color); margin-top: 14px;}
+
+.progress-page {
+  padding-left: 40px; padding-right: 40px; text-align: left;
+}
+.progress-stats { margin-bottom: 28px;}
+.progress-lessons ul {
+  list-style-type: none;
+  padding: 0;
+  line-height: 2;
+  margin: 8px 0 0 0;
+}
+.progress-lessons li {
+  color: var(--primary-color);
+  font-weight: 500;
+}
+
+
+@media (max-width: 800px) {
+  .sidenav { min-width: 80px; font-size: .97rem;}
+  .main-layout { flex-direction: column;}
+  .main-content { padding: 10px;}
+}
+
+@media (max-width: 450px) {
+  .header, .main-content, .dashboard-container, .progress-page { padding-left: 6px; padding-right: 6px;}
+  .lesson-page, .conversation-page, .challenge-page { padding: 12px 2px; }
+  .sidenav { font-size: .92rem; padding: 8px; min-width: 60px;}
 }
