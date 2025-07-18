@@ -70,7 +70,8 @@ const LANGUAGE_VOCAB = {
 /**
  * Create levels from the relevant translated word list for the current language,
  * aligned with the base language (so each word index is a translation pair).
- * Returns each lesson as an array of {word, translation}.
+ * Additionally breaks each lesson into micro-lessons (1 word/expression per micro-lesson).
+ * Returns levels, each with .microLessons: [{ type, content, completed, ... }]
  */
 function createLevelDataForLanguageWithTranslations(targetLanguageCode, baseLanguageCode, wordsPerLevel = 10, reviewMix = 0.3) {
   // Fallback to English if needed
@@ -111,9 +112,24 @@ function createLevelDataForLanguageWithTranslations(targetLanguageCode, baseLang
       idx: idx
     }));
 
+    // --- MICRO-LESSON STRUCTURE ---
+    // Each word becomes a micro-lesson unit (vocabulary)
+    // Optionally: Add more types, e.g., grammar quick-tip, speaking prompt, etc.
+    const microLessons = wordPairs.map((pair, i) => ({
+      id: `lvl${level}_word${pair.idx}`,
+      type: "vocab", // could expand to "grammar", "speaking", etc.
+      title: `Word: ${pair.word}`,
+      content: {
+        ...pair,
+        prompt: `Type or say the word for "${pair.translation}"`,
+      },
+      completed: false, // Per-micro-lesson completion
+    }));
+
     levels.push({
       level,
       words: wordPairs, // [{word, translation, idx}]
+      microLessons,
       complete: false,
       practiceComplete: false,
       testScore: null

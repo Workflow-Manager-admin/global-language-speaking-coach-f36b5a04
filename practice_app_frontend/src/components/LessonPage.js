@@ -6,8 +6,8 @@ import "../App.css";
 
 /**
  * PUBLIC_INTERFACE
- * LessonPage uses selectedLanguage from ProgressContext for TTS (no hardcoded localStorage/english fallback).
- * Now includes instant feedback with correct/incorrect indicator and explanation for user's answer submission.
+ * LessonPage presents micro-lessons (short, atomic vocabulary/grammar/speaking activities)
+ * to maximize focus, feedback, and engagement. Tracks and displays per-activity state.
  */
 function LessonPage() {
   const { levelId } = useParams();
@@ -21,29 +21,32 @@ function LessonPage() {
   const level = levels[levelIdx];
   const navigate = useNavigate();
 
-  const [wordsReviewed, setWordsReviewed] = useState(
-    Array(level?.words.length || 0).fill(false)
+  // Micro-lessons: [{type, content, completed, id}]
+  const microLessons = level?.microLessons || [];
+
+  // State: index of current micro-lesson step
+  const [microIdx, setMicroIdx] = useState(0);
+
+  // Track user input per micro-lesson
+  const [userInputs, setUserInputs] = useState(
+    Array(microLessons.length || 0).fill("")
   );
-  const [isMarkedPractice, setIsMarkedPractice] = useState(
-    !!level?.practiceComplete
+  // Feedback per micro-lesson: null = not checked, true = correct, false = incorrect
+  const [microResults, setMicroResults] = useState(
+    Array(microLessons.length || 0).fill(null)
+  );
+  // Explanation for incorrect/correct
+  const [microExplanation, setMicroExplanation] = useState(
+    Array(microLessons.length || 0).fill("")
+  );
+  // Animation for instant feedback
+  const [successAnim, setSuccessAnim] = useState(
+    Array(microLessons.length || 0).fill(false)
   );
 
-  // Track user input for each word
-  const [userInputs, setUserInputs] = useState(
-    Array(level?.words.length || 0).fill("")
-  );
-  // Track submission result for each word: null = not checked; true = correct, false = incorrect
-  const [answerResults, setAnswerResults] = useState(
-    Array(level?.words.length || 0).fill(null)
-  );
-  // Optionally, explanation text for incorrect
-  const [answerExplanation, setAnswerExplanation] = useState(
-    Array(level?.words.length || 0).fill("")
-  );
-  // Animation trigger for correct answer
-  const [successAnim, setSuccessAnim] = useState(
-    Array(level?.words.length || 0).fill(false)
-  );
+  // Micro-lesson completion state estimate
+  const allComplete =
+    microResults.filter((res) => res === true).length === microLessons.length;
 
   const { awardXP, recordPracticeEvent, unlockBadge } = useGamification();
 
@@ -65,7 +68,7 @@ function LessonPage() {
 
   if (!level) return <div>Lesson not found</div>;
 
-  // Prevent user from accessing locked levels
+  // Guard: Prevent access to locked levels
   if (level.level > nextAvailableLevel)
     return (
       <div className="lesson-page">
@@ -77,13 +80,12 @@ function LessonPage() {
       </div>
     );
 
-  // Levenshtein similarity (helper, matches the logic in AccuracySidebar)
+  // Levenshtein similarity checker (matches others)
   function calculateSimilarity(a, b) {
     if (!a || !b) return 0;
     const sa = a.trim().toLowerCase();
     const sb = b.trim().toLowerCase();
     if (!sa || !sb) return 0;
-    // Levenshtein
     const matrix = Array(sb.length + 1)
       .fill(null)
       .map(() => []);
@@ -110,298 +112,319 @@ function LessonPage() {
     return Math.round(normalized);
   }
 
-  // Check answer and trigger feedback
-  const handleAnswerCheck = (idx) => {
-    const correctAnswer = (level.words[idx]?.word || "").trim().toLowerCase();
-    const userText = (userInputs[idx] || "").trim().toLowerCase();
-    const similarity = calculateSimilarity(correctAnswer, userText);
-    // Accept as correct if > 80% similarity (for spelling mistakes etc.)
+  // Check the answer for current micro-lesson and show feedback
+  const handleCheck = () => {
+    const ml = microLessons[microIdx];
+    const answerRaw = ml.content.word || "";
+    const correctAnswer = answerRaw.trim().toLowerCase();
+    const userAnswer = (userInputs[microIdx] || "").trim().toLowerCase();
+    const similarity = calculateSimilarity(correctAnswer, userAnswer);
     const isCorrect = similarity >= 80;
 
-    setAnswerResults((arr) => {
+    setMicroResults((arr) => {
       const n = [...arr];
-      n[idx] = isCorrect;
+      n[microIdx] = isCorrect;
       return n;
     });
-    setAnswerExplanation((arr) => {
+    setMicroExplanation((arr) => {
       const n = [...arr];
       if (isCorrect) {
-        n[idx] = "";
-      } else if (!userText) {
-        n[idx] = "No answer entered. Try typing the word as you heard it.";
+        n[microIdx] = "";
+      } else if (!userAnswer) {
+        n[microIdx] = "No answer entered. Try typing what you hear or see!";
       } else if (similarity > 50) {
-        n[idx] = `Almost correct! Spelling or small mistake. Correct: "${level.words[idx]?.word}"`;
+        n[microIdx] = `Almost correct! Spelling or typo. Correct: "${answerRaw}"`;
       } else {
-        n[idx] = `Incorrect. Correct answer: "${level.words[idx]?.word}"`;
+        n[microIdx] = `Incorrect. Correct answer: "${answerRaw}"`;
       }
       return n;
     });
-    // Play animation for correct answer
+
+    // Success pop
     if (isCorrect) {
       setSuccessAnim((arr) => {
         const n = [...arr];
-        n[idx] = true;
+        n[microIdx] = true;
         return n;
       });
       setTimeout(() => {
         setSuccessAnim((arr) => {
           const n = [...arr];
-          n[idx] = false;
+          n[microIdx] = false;
           return n;
         });
       }, 900);
     }
-    // Mark as reviewed on correct
-    if (isCorrect) {
-      setWordsReviewed((arr) => {
-        const n = [...arr];
-        n[idx] = true;
-        return n;
-      });
-    }
   };
 
-  // Practice completion
+  // Mark lesson as done to enable progression, award XP
   const handlePracticeDone = () => {
     beginLevelPractice(level.level);
-    setIsMarkedPractice(true);
     awardXP(10, "lesson_complete");
     recordPracticeEvent();
     if (level.level === 1) unlockBadge("first_lesson");
   };
 
-  return (
-    <div style={{ position: "relative", minHeight: 330 }}>
-      <div className="lesson-page">
-        <h2>Level {level.level}: Practice Words</h2>
-        <p style={{ maxWidth: 540 }}>
-          Go through each word. Listen and <b>type what you hear</b> to practice your listening and spelling. You'll get instant feedback after submission!
-        </p>
-        <ul style={{ paddingLeft: 0, listStyle: "none", fontSize: "1.18rem" }}>
-          {level.words.map((entry, idx) => (
-            <li
-              key={(entry.word || "") + "-" + idx}
-              style={{
-                marginBottom: 16,
-                background: "#eaf9fa",
-                display: "flex",
-                flexDirection: "column",
-                padding: "12px 18px",
-                borderRadius: "6px",
-                position: "relative",
-                border: answerResults[idx] === true
-                  ? "2px solid var(--accent-color)"
-                  : answerResults[idx] === false
-                  ? "2px solid #d23c37"
-                  : "1.5px solid #b6d5db",
-                boxShadow: successAnim[idx]
-                  ? "0 0 16px 2px #62f997"
-                  : undefined,
-                transition: "border .2s, box-shadow .2s"
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <b style={{ minWidth: 38 }}>{idx + 1}.</b>
-                <span style={{ flex: 2, fontWeight: 600, fontSize: "1.13em" }}>
-                  {entry.word}
-                </span>
-                <span
-                  style={{
-                    flex: 2,
-                    color: "var(--secondary-color)",
-                    marginLeft: 8,
-                    fontStyle: "italic",
-                    fontWeight: 500,
-                    fontSize: "0.99em",
-                  }}
-                >
-                  {entry.translation ? `(${entry.translation})` : ""}
-                </span>
-                <button
-                  className="btn btn-accent"
-                  style={{
-                    marginLeft: 12,
-                    padding: "2px 14px",
-                    fontSize: "0.97rem",
-                  }}
-                  title="Hear pronunciation"
-                  onClick={async () => {
-                    // Always use best Google voice for language, fallback to high quality native
-                    if (window.speechSynthesis && entry.word) {
-                      try {
-                        window.speechSynthesis.cancel();
-                      } catch {}
-                      const voices = window.speechSynthesis.getVoices() || [];
-                      // Prefer Google-branded voice for language
-                      let v =
-                        voices.find(
-                          (vo) =>
-                            vo.lang &&
-                            vo.lang
-                              .toLowerCase()
-                              .startsWith(languageCode.toLowerCase()) &&
-                            ((vo.name && /google/i.test(vo.name)) ||
-                              (vo.voiceURI && /google/i.test(vo.voiceURI)))
-                        ) ||
-                        voices.find(
-                          (vo) =>
-                            vo.lang &&
-                            (vo.lang
-                              .toLowerCase()
-                              .startsWith(languageCode.toLowerCase()) ||
-                              vo.lang.toLowerCase() === speechLang.toLowerCase())
-                        );
-                      if (!v && voices.length > 0) v = voices[0];
-                      const ut = new window.SpeechSynthesisUtterance(entry.word);
-                      ut.lang = v?.lang || speechLang;
-                      ut.rate = 1;
-                      ut.pitch = 1.15;
-                      if (v) ut.voice = v;
-                      window.speechSynthesis.speak(ut);
-                    }
-                  }}
-                >
-                  🔊
-                </button>
-              </div>
-              {/* Instant feedback answer area */}
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 12, marginTop: 6, flexWrap: "wrap" }}>
-                <input
-                  style={{
-                    fontSize: "1.13em",
-                    flex: 3,
-                    border: answerResults[idx] === true
-                      ? "2px solid var(--accent-color)"
-                      : answerResults[idx] === false
-                      ? "2px solid #d23c37"
-                      : "1.3px solid #b6d5db",
-                    borderRadius: 6,
-                    padding: "4.5px 14px",
-                    marginRight: 7,
-                    transition: "border .19s"
-                  }}
-                  placeholder="Type what you heard"
-                  value={userInputs[idx]}
-                  onChange={(e) => {
-                    // If they manually edit input after correct, reset state.
-                    setUserInputs((arr) => {
-                      const n = [...arr];
-                      n[idx] = e.target.value;
-                      return n;
-                    });
-                    if (answerResults[idx] !== null) {
-                      setAnswerResults((arr) => {
-                        const n = [...arr];
-                        n[idx] = null;
-                        return n;
-                      });
-                      setAnswerExplanation((arr) => {
-                        const n = [...arr];
-                        n[idx] = "";
-                        return n;
-                      });
-                    }
-                  }}
-                  disabled={answerResults[idx] === true}
-                  aria-label="Type answer"
-                  autoComplete="off"
-                />
-                <button
-                  className="btn btn-primary"
-                  style={{ minWidth: 74 }}
-                  onClick={() => handleAnswerCheck(idx)}
-                  disabled={
-                    answerResults[idx] === true ||
-                    !userInputs[idx].trim()
-                  }
-                  aria-label="Check answer"
-                >
-                  Check
-                </button>
-                {answerResults[idx]===true && (
-                  <span style={{
-                    color: "var(--accent-color)",
-                    fontWeight: 700,
-                    fontSize: "1.15em",
-                    marginLeft: 5,
-                    transition: "color .2s"
-                  }}>
-                    ✓ Correct!
-                    <span
-                      style={{
-                        marginLeft: 5,
-                        animation: "kavia-pop 0.7s linear",
-                        display: "inline-block"
-                      }}
-                    >
-                      🎉
-                    </span>
-                  </span>
-                )}
-                {answerResults[idx]===false && (
-                  <span style={{
-                    color: "#d23c37",
-                    fontWeight: 700,
-                    fontSize: "1.10em",
-                    marginLeft: 5
-                  }}>
-                    ✗ Incorrect
-                  </span>
-                )}
-              </div>
-              {answerExplanation[idx] && (
-                <div style={{
-                  color: answerResults[idx] ? "var(--accent-color)" : "#b14343",
-                  marginTop: 5,
-                  fontSize: ".99em",
-                  fontStyle: "italic",
-                  minHeight: 17,
-                  transition: "color .2s"
-                }}>
-                  {answerExplanation[idx]}
-                </div>
-              )}
-              <div style={{marginTop: 2}}>
-                {wordsReviewed[idx] && answerResults[idx] === true && (
-                  <span style={{
-                    color: "#46bb54",
-                    fontWeight: 600,
-                    fontSize: ".98em"
-                  }}>
-                    Marked as reviewed!
-                  </span>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
+  // UI for single micro-lesson at a time
+  function renderMicroLesson(ml, idx) {
+    return (
+      <div
+        key={ml.id}
+        style={{
+          marginBottom: 16,
+          background: "#eaf9fa",
+          display: "flex",
+          flexDirection: "column",
+          padding: "20px 22px 20px 22px",
+          borderRadius: "7px",
+          position: "relative",
+          border:
+            microResults[idx] === true
+              ? "2.3px solid var(--accent-color)"
+              : microResults[idx] === false
+              ? "2px solid #d23c37"
+              : "1.3px solid #b6d5db",
+          boxShadow: successAnim[idx]
+            ? "0 0 16px 2px #62f997"
+            : undefined,
+          minHeight: 144,
+          transition: "border .2s, box-shadow .2s",
+        }}
+      >
+        <div style={{ fontWeight: 700, fontSize: "1.14em", marginBottom: 3 }}>
+          {"Practice: "}
+          <span style={{ color: "var(--primary-color)" }}>
+            {ml.content.word}
+          </span>
+        </div>
+        <div style={{
+          color: "var(--secondary-color)",
+          fontSize: "1.1em",
+          marginBottom: 8,
+        }}>
+          Meaning: <span style={{ fontWeight: 600 }}>{ml.content.translation}</span>
+        </div>
         <button
           className="btn btn-accent"
-          disabled={
-            isMarkedPractice ||
-            wordsReviewed.filter(Boolean).length !== level.words.length
-          }
-          onClick={handlePracticeDone}
-          style={{ marginTop: 22 }}
+          style={{
+            marginLeft: 3,
+            padding: "2.5px 18px",
+            fontSize: "1.08rem",
+            maxWidth: 130,
+          }}
+          title="Hear pronunciation"
+          onClick={async () => {
+            if (window.speechSynthesis && ml.content.word) {
+              try { window.speechSynthesis.cancel(); } catch {}
+              const voices = window.speechSynthesis.getVoices() || [];
+              let v =
+                voices.find(
+                  (vo) =>
+                    vo.lang &&
+                    vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) &&
+                    ((vo.name && /google/i.test(vo.name)) ||
+                      (vo.voiceURI && /google/i.test(vo.voiceURI)))
+                ) ||
+                voices.find(
+                  (vo) =>
+                    vo.lang &&
+                    (vo.lang
+                      .toLowerCase()
+                      .startsWith(languageCode.toLowerCase()) ||
+                      vo.lang.toLowerCase() === speechLang.toLowerCase())
+                );
+              if (!v && voices.length > 0) v = voices[0];
+              const ut = new window.SpeechSynthesisUtterance(ml.content.word);
+              ut.lang = v?.lang || speechLang;
+              ut.rate = 1;
+              ut.pitch = 1.15;
+              if (v) ut.voice = v;
+              window.speechSynthesis.speak(ut);
+            }
+          }}
         >
-          {isMarkedPractice
-            ? "Practice Complete"
-            : "I Completed All Words"}
+          🔊
         </button>
-        <div>
+        <div style={{ margin: "16px 0 0 0", display: "flex", alignItems: "flex-end", gap: 12 }}>
+          <input
+            style={{
+              fontSize: "1.18em",
+              flex: 3,
+              border:
+                microResults[idx] === true
+                  ? "2px solid var(--accent-color)"
+                  : microResults[idx] === false
+                  ? "2px solid #d23c37"
+                  : "1.3px solid #b6d5db",
+              borderRadius: 7,
+              padding: "7px 16px",
+              marginRight: 4,
+              transition: "border .17s",
+              width: "80%",
+            }}
+            placeholder={"Type what you hear or see"}
+            value={userInputs[idx]}
+            onChange={(e) => {
+              setUserInputs((arr) => {
+                const n = [...arr];
+                n[idx] = e.target.value;
+                return n;
+              });
+              if (microResults[idx] !== null) {
+                setMicroResults((arr) => {
+                  const n = [...arr];
+                  n[idx] = null;
+                  return n;
+                });
+                setMicroExplanation((arr) => {
+                  const n = [...arr];
+                  n[idx] = "";
+                  return n;
+                });
+              }
+            }}
+            disabled={microResults[idx] === true}
+            aria-label="Type answer"
+            autoComplete="off"
+          />
           <button
             className="btn btn-primary"
-            style={{
-              marginTop: 28,
-              marginLeft: 5,
-              fontFamily: "Arial, sans-serif",
-            }}
-            disabled={!isMarkedPractice}
-            onClick={() => navigate(`/challenge/${level.level}`)}
+            style={{ minWidth: 74 }}
+            onClick={handleCheck}
+            disabled={
+              microResults[idx] === true || !userInputs[idx].trim()
+            }
+            aria-label="Check answer"
           >
-            {isMarkedPractice ? "Take Level Test" : "Unlock Test"}
+            Check
           </button>
+          {microResults[idx] === true && (
+            <span style={{
+              color: "var(--accent-color)",
+              fontWeight: 700,
+              fontSize: "1.15em",
+              marginLeft: 5,
+              transition: "color .2s",
+            }}>
+              ✓ Correct!
+              <span
+                style={{
+                  marginLeft: 5,
+                  animation: "kavia-pop 0.7s linear",
+                  display: "inline-block"
+                }}
+              >
+                🎉
+              </span>
+            </span>
+          )}
+          {microResults[idx] === false && (
+            <span style={{
+              color: "#d23c37",
+              fontWeight: 700,
+              fontSize: "1.08em",
+              marginLeft: 5
+            }}>
+              ✗ Incorrect
+            </span>
+          )}
         </div>
+        {microExplanation[idx] && (
+          <div style={{
+            color: microResults[idx] ? "var(--accent-color)" : "#b14343",
+            marginTop: 6,
+            fontSize: "1.01em",
+            fontStyle: "italic",
+            minHeight: 17,
+            transition: "color .2s"
+          }}>
+            {microExplanation[idx]}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Move to next/previous micro-lesson
+  const goNext = () => {
+    setMicroIdx((prev) => Math.min(prev + 1, microLessons.length - 1));
+  };
+  const goPrev = () => {
+    setMicroIdx((prev) => Math.max(prev - 1, 0));
+  };
+
+  // On finish, trigger completion and congratulation
+  const finishedState = allComplete;
+
+  return (
+    <div style={{ position: "relative", minHeight: 260 }}>
+      <div className="lesson-page" style={{ maxWidth: 430, margin: "0 auto" }}>
+        <h2 style={{ marginBottom: 3 }}>Level {level.level}: Micro-Lessons</h2>
+        <p style={{ color: "#306", marginBottom: 15 }}>
+          Bite-sized activities! Get <b>instant feedback</b> as you practice each word or phrase.
+        </p>
+        {microLessons.length === 0 ? (
+          <div>No micro-lessons available.</div>
+        ) : (
+          <>
+            <div>
+              <div style={{
+                color: "var(--accent-color)",
+                marginBottom: 7,
+                fontWeight: 600,
+                fontSize: ".99em"
+              }}>
+                {`Progress: ${microIdx + 1} / ${microLessons.length}`}
+              </div>
+              {renderMicroLesson(microLessons[microIdx], microIdx)}
+              <div style={{ marginTop: 6, display: "flex", gap: 18 }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={goPrev}
+                  disabled={microIdx === 0}
+                >
+                  Prev
+                </button>
+                <button
+                  className="btn btn-primary"
+                  onClick={goNext}
+                  disabled={microIdx === microLessons.length - 1}
+                >
+                  Next
+                </button>
+              </div>
+              <div style={{ marginTop: 19 }}>
+                {finishedState && (
+                  <div style={{ color: "#30a94e", fontWeight: 700, fontSize: "1.1em" }}>
+                    🎯 Micro-lesson set complete! Mark as done to unlock next test.
+                  </div>
+                )}
+                <button
+                  className="btn btn-accent"
+                  style={{ marginTop: 12 }}
+                  disabled={!finishedState}
+                  onClick={handlePracticeDone}
+                >
+                  {finishedState ? "Practice Complete" : "Finish All First"}
+                </button>
+              </div>
+              <div>
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    marginTop: 19,
+                    marginLeft: 5,
+                    fontFamily: "Arial, sans-serif",
+                  }}
+                  disabled={!finishedState}
+                  onClick={() => navigate(`/challenge/${level.level}`)}
+                >
+                  {finishedState ? "Take Level Test" : "Unlock Test"}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
       {/* Keyframes for animation */}
       <style>
@@ -417,4 +440,5 @@ function LessonPage() {
     </div>
   );
 }
+
 export default LessonPage;
