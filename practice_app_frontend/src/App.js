@@ -12,6 +12,7 @@ import ChallengePage from "./components/ChallengePage";
 import ProgressPage from "./components/ProgressPage";
 import Header from "./components/Header";
 import SideNav from "./components/SideNav";
+import SkillTree from "./components/SkillTree";
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ProgressProvider } from "./context/ProgressContext";
@@ -50,6 +51,7 @@ function App() {
                     <Route path="/login" element={<AuthPage />} />
                     <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
                     <Route path="/language" element={<RequireAuth><LanguageSelector /></RequireAuth>} />
+                    <Route path="/skilltree" element={<RequireAuth><SkillTree /></RequireAuth>} />
                     <Route path="/lesson/:levelId" element={<RequireAuth><LessonPage /></RequireAuth>} />
                     <Route path="/conversation/:levelId" element={<RequireAuth><ConversationPage /></RequireAuth>} />
                     <Route path="/challenge/:levelId" element={<RequireAuth><ChallengePage /></RequireAuth>} />

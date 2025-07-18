@@ -12,7 +12,7 @@ function SideNav() {
     <nav className="sidenav">
       <NavLink to="/dashboard" className={({isActive}) => isActive ? "active" : ""}>🏠 Dashboard</NavLink>
       <NavLink to="/language" className={({isActive}) => isActive ? "active" : ""}>🌐 Select Language</NavLink>
-      <NavLink to="/lesson/1" className={({isActive}) => isActive ? "active" : ""}>📖 Lessons</NavLink>
+      <NavLink to="/skilltree" className={({isActive}) => isActive ? "active" : ""}>🌳 Skill Tree</NavLink>
       <NavLink to="/challenge/1" className={({isActive}) => isActive ? "active" : ""}>🔊 Speaking Challenge</NavLink>
       <NavLink to="/progress" className={({isActive}) => isActive ? "active" : ""}>📊 Progress</NavLink>
     </nav>

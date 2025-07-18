@@ -205,7 +205,21 @@ export function ProgressProvider({ children }) {
     }
   }
 
-  // Which level can user currently access?
+  // --- Skill Tree Prerequisite State ---
+  // Add .locked/.unlocked to each level (derived, not persisted)
+  // First is always unlocked, the rest require prior passed with >= 75%
+  const treeLevels = levels.map((l, i) => {
+    if (i === 0) return { ...l, unlocked: true, locked: false };
+    const prev = levels[i-1];
+    const unlocked = prev.testScore && prev.testScore.passed;
+    return {
+      ...l,
+      unlocked,
+      locked: !unlocked,
+    };
+  });
+
+  // Which level can user currently access? (linear only)
   const lastPassedLevel = levels.reduce(
     (acc, l, idx) =>
       l.testScore && l.testScore.passed ? idx + 1 : acc,
@@ -261,7 +275,8 @@ export function ProgressProvider({ children }) {
   return (
     <ProgressContext.Provider
       value={{
-        levels,
+        levels: treeLevels,       // List of levels, now with .locked/.unlocked state
+        rawLevels: levels,        // In case old linear logic needed
         lessons,
         stats,
         selectedLanguage,

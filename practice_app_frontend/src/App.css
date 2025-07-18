@@ -291,6 +291,28 @@
 }
 
 
+/* --- SkillTree styles --- */
+.skill-tree-page {
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  box-shadow: 0 2px 9px 0 rgba(31,48,81,0.07);
+  padding: 34px 14px 44px 14px;
+  min-width: 330px;
+}
+.skill-tree-node {
+  transition: all .19s;
+  outline: none;
+}
+.skill-tree-node:focus-visible {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(52,199,89,0.17);
+}
+.skill-tree-node[disabled] {
+  opacity: .6;
+  filter: grayscale(0.48);
+  pointer-events: none;
+}
+
 @media (max-width: 800px) {
   .sidenav { min-width: 80px; font-size: .97rem;}
   .main-layout { flex-direction: column;}
