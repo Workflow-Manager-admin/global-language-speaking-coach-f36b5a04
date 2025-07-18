@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProgress } from "../context/ProgressContext";
 import "../App.css";
@@ -8,10 +8,13 @@ import "../App.css";
  * SkillTree component: Renders level progression as a skill tree layout.
  * Locked nodes are shown grayed out; unlocked nodes are clickable.
  * Prerequisite (must have score >=75% for previous) is enforced.
+ * If a level is completed, 'Repeat Level' is offered to allow practice/test again.
  */
 function SkillTree() {
   const { levels, nextAvailableLevel } = useProgress();
   const navigate = useNavigate();
+  // Track which (if any) level is being repeated for visual feedback, per session.
+  const [repeatState, setRepeatState] = useState({});
 
   // Calculate unlock status for each node
   // The first is always unlocked
@@ -28,6 +31,14 @@ function SkillTree() {
     };
   });
 
+  // Handler to activate repeat mode on a completed level (for lesson & challenge)
+  function handleRepeatLevel(levelNum) {
+    // Option: add more logic here for analytics or trophy (this is just UI gating)
+    setRepeatState((state) => ({ ...state, [levelNum]: Date.now() }));
+    // When repeating, navigate to lesson for that level (can also offer test shortcut)
+    navigate(`/lesson/${levelNum}?repeat=1`);
+  }
+
   // Visually lay out as vertical or zig-zag tree for simplicity
   // (A more complex tree is possible but this gives a clear progression)
   return (
@@ -39,61 +50,83 @@ function SkillTree() {
         alignItems: "center",
         gap: 26
       }}>
-        {nodeStates.map((node, idx) => (
-          <div
-            key={node.level}
-            style={{
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 18
-            }}
-          >
-            {/* Draw branch line except first node */}
-            {idx !== 0 && (
-              <div style={{
-                width: 3,
-                height: 32,
-                background: nodeStates[idx-1].unlocked
-                  ? "var(--accent-color)"
-                  : "#ccc",
-                marginRight: 14
-              }} />
-            )}
-            <SkillNode node={node}
-                       highlight={node.unlocked && !node.locked}
-                       locked={node.locked}
-                       onClick={() => {
-                         if (!node.locked) navigate(`/lesson/${node.level}`);
-                       }}
-            />
-            <span style={{
-              marginLeft: 14,
-              color: node.locked
-                ? "#bbb"
-                : (node.unlocked ? "var(--accent-color)" : "#222"),
-              fontWeight: node.unlocked ? 700 : 500,
-            }}>
-              {node.locked ? "🔒" : "🟢"}
-              {node.unlocked && !node.locked && !node.locked
-                ? " Unlocked" : " Locked"}
-            </span>
-            {/* Node test info */}
-            <span style={{
-              marginLeft: 10,
-              fontSize: ".99em",
-              color: node.testScore
-                ? (node.testScore.passed ? "var(--accent-color)" : "#cc4444")
-                : "#666"
-            }}>
-              {node.testScore
-                ? (node.testScore.passed
-                    ? `✅ ${node.testScore.score}%`
-                    : `❌ ${node.testScore.score}%`)
-                : "No test"}
-            </span>
-          </div>
-        ))}
+        {nodeStates.map((node, idx) => {
+          const isCompleted = node.testScore && node.testScore.passed;
+          return (
+            <div
+              key={node.level}
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 18
+              }}
+            >
+              {/* Draw branch line except first node */}
+              {idx !== 0 && (
+                <div style={{
+                  width: 3,
+                  height: 32,
+                  background: nodeStates[idx-1].unlocked
+                    ? "var(--accent-color)"
+                    : "#ccc",
+                  marginRight: 14
+                }} />
+              )}
+              <SkillNode 
+                node={node}
+                highlight={node.unlocked && !node.locked}
+                locked={node.locked}
+                onClick={() => {
+                  if (!node.locked) navigate(`/lesson/${node.level}`);
+                }}
+              />
+              <span style={{
+                marginLeft: 14,
+                color: node.locked
+                  ? "#bbb"
+                  : (node.unlocked ? "var(--accent-color)" : "#222"),
+                fontWeight: node.unlocked ? 700 : 500,
+              }}>
+                {node.locked ? "🔒" : "🟢"}
+                {node.unlocked && !node.locked && !node.locked
+                  ? " Unlocked" : " Locked"}
+              </span>
+              {/* Node test info */}
+              <span style={{
+                marginLeft: 10,
+                fontSize: ".99em",
+                color: node.testScore
+                  ? (node.testScore.passed ? "var(--accent-color)" : "#cc4444")
+                  : "#666"
+              }}>
+                {node.testScore
+                  ? (node.testScore.passed
+                      ? `✅ ${node.testScore.score}%`
+                      : `❌ ${node.testScore.score}%`)
+                  : "No test"}
+              </span>
+              {/* Add 'Repeat Level' button if completed */}
+              {isCompleted && (
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    marginLeft: 16,
+                    fontSize: "0.96em",
+                    padding: "6px 17px",
+                    whiteSpace: "nowrap",
+                    fontWeight: 600,
+                    boxShadow: repeatState[node.level] ? '0 0 7px 1px #aefc93' : undefined,
+                  }}
+                  aria-label={`Repeat Level ${node.level}`}
+                  onClick={() => handleRepeatLevel(node.level)}
+                >
+                  🔁 Repeat Level
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
       <div style={{ marginTop: 38, textAlign: "center", color: "#666", fontSize: ".99em" }}>
         <div>
@@ -101,7 +134,10 @@ function SkillTree() {
           <span style={{ color: "#aaa", marginLeft: 10 }}> 🔒 Locked (pass prior test &gt;= 75%)</span>
         </div>
         <div style={{ marginTop: 12 }}>
-          Click an unlocked node to enter its lesson.
+          Click an unlocked node to enter its lesson.<br />
+          <span style={{ color: "#198b42", fontWeight: 500 }}>
+            Completed levels can be repeated for extra practice or to re-test, without erasing your progress.
+          </span>
         </div>
       </div>
     </div>
