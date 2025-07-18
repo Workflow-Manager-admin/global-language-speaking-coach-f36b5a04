@@ -7,16 +7,25 @@ import "../App.css";
 
 // PUBLIC_INTERFACE
 /**
- * ChallengePage uses selectedLanguage for both TTS and SR (no hardcoded language).
+ * ChallengePage for the level test:
+ * Prompts with the word/phrase in the user's base language,
+ * user must provide the translation in the target (learning) language.
  */
 function ChallengePage() {
   const { levelId } = useParams();
-  const { levels, markLevelTestScore, nextAvailableLevel, selectedLanguage } = useProgress();
-  const levelIdx = levels.findIndex(l => String(l.level) === String(levelId));
+  const {
+    levels,
+    markLevelTestScore,
+    nextAvailableLevel,
+    selectedLanguage,
+    baseLanguage,
+  } = useProgress();
+
+  const levelIdx = levels.findIndex((l) => String(l.level) === String(levelId));
   const level = levels[levelIdx];
   const navigate = useNavigate();
 
-  // Build language code for BCP47 for speech APIs
+  // Speech recognition for input (should be in target/learning language)
   const languageBCP47Map = {
     en: "en-US",
     es: "es-ES",
@@ -27,17 +36,17 @@ function ChallengePage() {
     ar: "ar-SA",
     ru: "ru-RU",
     ko: "ko-KR",
-    pt: "pt-PT"
+    pt: "pt-PT",
   };
-  const languageCode = (selectedLanguage?.code || "en");
+  const languageCode = selectedLanguage?.code || "en";
   const speechLang = languageBCP47Map[languageCode] || languageCode;
 
   // For multi-word sequential challenge
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [userAttempts, setUserAttempts] = useState(Array((level?.words || []).length).fill(""));
-  const [results, setResults] = useState(Array((level?.words || []).length).fill(null));
+  const [userAttempts, setUserAttempts] = useState(Array(level?.words?.length || 0).fill(""));
+  const [results, setResults] = useState(Array(level?.words?.length || 0).fill(null));
   const [showReview, setShowReview] = useState(false);
-  const totalWords = level?.words.length || 0;
+  const totalWords = level?.words?.length || 0;
 
   const {
     transcript,
@@ -50,15 +59,13 @@ function ChallengePage() {
   const ttsUtterRef = useRef(null);
   const [ttsPlaying, setTtsPlaying] = useState(false);
 
-  // In new structure, level.words is [{word, translation, idx}]
-
   if (!supported) {
     return <div>Your browser does not support speech recognition.</div>;
   }
 
   if (!level) return <div>Level not found</div>;
 
-  // Ignore test route if practice not done yet
+  // Prevent if practice incomplete
   if (!level.practiceComplete)
     return (
       <div className="challenge-page">
@@ -67,7 +74,7 @@ function ChallengePage() {
       </div>
     );
 
-  // Prevent user from accessing locked levels
+  // Prevent if level locked
   if (level.level > nextAvailableLevel)
     return (
       <div className="challenge-page">
@@ -76,32 +83,44 @@ function ChallengePage() {
       </div>
     );
 
-  // Handle TTS for current word (AI pronunciation)
+  // Speak the prompt in the base language (not the learning language)
   const handleSpeakPrompt = () => {
-    const prompt = level.words[currentIdx];
-    if (window.speechSynthesis && prompt) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
+    const promptEntry = level.words[currentIdx];
+    if (!promptEntry) return;
+    const baseLangCode = baseLanguage?.code || "en";
+    const bcp47BaseMap = {
+      en: "en-US",
+      es: "es-ES",
+      fr: "fr-FR",
+      de: "de-DE",
+      zh: "zh-CN",
+      ja: "ja-JP",
+      ar: "ar-SA",
+      ru: "ru-RU",
+      ko: "ko-KR",
+      pt: "pt-PT"
+    };
+    const baseSpeechLang = bcp47BaseMap[baseLangCode] || baseLangCode;
+    if (window.speechSynthesis && promptEntry.translation) {
+      try { window.speechSynthesis.cancel(); } catch {}
       const voices = window.speechSynthesis.getVoices() || [];
-      // Prefer Google-branded voice for language
       let v =
         voices.find(
           vo =>
             vo.lang &&
-            vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) &&
+            vo.lang.toLowerCase().startsWith(baseLangCode.toLowerCase()) &&
             ((vo.name && /google/i.test(vo.name)) ||
               (vo.voiceURI && /google/i.test(vo.voiceURI)))
         ) ||
         voices.find(
           vo =>
             vo.lang &&
-            (vo.lang.toLowerCase().startsWith(languageCode.toLowerCase()) ||
-              vo.lang.toLowerCase() === speechLang.toLowerCase())
+            (vo.lang.toLowerCase().startsWith(baseLangCode.toLowerCase()) ||
+              vo.lang.toLowerCase() === baseSpeechLang.toLowerCase())
         );
       if (!v && voices.length > 0) v = voices[0];
-      const utt = new window.SpeechSynthesisUtterance(prompt);
-      utt.lang = v?.lang || speechLang;
+      const utt = new window.SpeechSynthesisUtterance(promptEntry.translation);
+      utt.lang = v?.lang || baseSpeechLang;
       utt.rate = 1;
       utt.pitch = 1.15;
       if (v) utt.voice = v;
@@ -112,33 +131,21 @@ function ChallengePage() {
     }
   };
 
-  // Calculate similarity function
-  /**
-   * Calculates the similarity score between two phrases (expected and user's spoken input).
-   * Ensures 'expected' is always converted to a string to safely allow .trim() (defensive for translation/object types).
-   * @param {*} expected - the expected string/phrase (can be object/array/string)
-   * @param {*} userSpoken - user's spoken input (usually string)
-   * @returns {number} similarity score [0-100]
-   */
+  // Calculate similarity between answer and user's attempt
   function calcScore(expected, userSpoken) {
-    // Defensive: Always convert expected to string before .trim()
     if (!expected || !userSpoken) return 0;
     let exp = expected;
-    // If expected is an object (e.g. translation pair), try to use .word property or JSON.stringify fallback
     if (typeof exp === "object" && exp !== null) {
-      // Try to find a "word" field or "translation"
       if (typeof exp.word === "string") exp = exp.word;
       else if (typeof exp.translation === "string") exp = exp.translation;
       else exp = JSON.stringify(exp);
     }
-    // If expected is not string and not converted yet, force to string
     if (typeof exp !== "string") exp = String(exp ?? "");
     let usr = userSpoken;
     if (typeof usr !== "string") usr = String(usr ?? "");
-    let a = exp.trim().toLowerCase(),
-        b = usr.trim().toLowerCase();
+    let a = exp.trim().toLowerCase(), b = usr.trim().toLowerCase();
 
-    // Levenshtein as before
+    // Levenshtein
     const sa = a, sb = b;
     const matrix = Array(sb.length + 1).fill(null).map(() => []);
     for (let i = 0; i <= sb.length; i++) { matrix[i][0] = i; }
@@ -159,39 +166,36 @@ function ChallengePage() {
     return Math.round(Math.max(0, 100 - (rawScore / maxLen) * 100));
   }
 
-  // On submit for this word
+  // User submits an attempt
   const handleWordSubmit = () => {
-    const prompt = level.words[currentIdx];
+    const expected = level.words[currentIdx]?.word; // correct answer in target language
     const attempt = transcript;
-    const score = calcScore(prompt, attempt);
-    setUserAttempts(atts => {
+    const score = calcScore(expected, attempt);
+    setUserAttempts((atts) => {
       const copy = [...atts];
       copy[currentIdx] = attempt;
       return copy;
     });
-    setResults(rs => {
+    setResults((rs) => {
       const rr = [...rs];
       rr[currentIdx] = score;
       return rr;
     });
   };
 
-  // Proceed to next or review
   const handleNextWord = () => {
     if (currentIdx < totalWords - 1) {
-      setCurrentIdx(idx => idx + 1);
+      setCurrentIdx((idx) => idx + 1);
     } else {
       setShowReview(true);
     }
   };
 
-  // On submitting test after all words attempted
   const handleTestSubmit = () => {
-    // Compute average (as percentage of words ≥ 75%), require ≥ 75%
-    const numPassed = results.filter(s => s !== null && s >= 75).length;
+    const numPassed = results.filter((s) => s !== null && s >= 75).length;
     const percent = Math.round((numPassed / totalWords) * 100);
     markLevelTestScore(level.level, percent);
-    setShowReview("submit"); // Used as a flag to show pass/fail summary
+    setShowReview("submit");
   };
 
   // Render word test/question step-by-step
@@ -203,17 +207,28 @@ function ChallengePage() {
           <div>
             <b>Prompt {currentIdx + 1} of {totalWords}:</b>{" "}
             <span style={{ fontWeight: 600, fontSize: "1.08em" }}>
-              {level.words[currentIdx]?.word}
-            </span>{" "}
-            <span style={{ color: "var(--secondary-color)", fontStyle: "italic", fontSize: "1em", marginLeft: 6 }}>
-              ({level.words[currentIdx]?.translation})
+              {level.words[currentIdx]?.translation}
+            </span>
+            <span style={{
+              color: "var(--secondary-color)",
+              fontStyle: "italic",
+              fontSize: "1em",
+              marginLeft: 6
+            }}>
+              ({baseLanguage?.label || "Base Language"})
             </span>
             <button
               onClick={handleSpeakPrompt}
               style={{ marginLeft: 10, fontSize: "0.95rem" }}
-              title="Hear word"
+              title={`Hear "${level.words[currentIdx]?.translation}" in base language`}
             >🔊</button>
-            {ttsPlaying && <span style={{ marginLeft: 7, color: "var(--primary-color)", fontWeight: 400 }}>Speaking...</span>}
+            {ttsPlaying && (
+              <span style={{
+                marginLeft: 7,
+                color: "var(--primary-color)",
+                fontWeight: 400
+              }}>Speaking...</span>
+            )}
           </div>
           <div className="user-challenge">
             <button
@@ -223,6 +238,15 @@ function ChallengePage() {
             >
               {listening ? "Listening... (release to finish)" : "🎤 Hold to Record"}
             </button>
+            <div style={{
+              fontSize: '1.1em',
+              fontWeight: 500,
+              color: "var(--primary-color)"
+            }}>
+              <span>
+                Say or type the translation in <b>{selectedLanguage?.label || "target language"}</b>:
+              </span>
+            </div>
             <div className="user-transcript">{transcript}</div>
           </div>
           <button
@@ -233,9 +257,17 @@ function ChallengePage() {
             Submit Attempt
           </button>
           {!!userAttempts[currentIdx] && results[currentIdx] !== null && (
-            <React.Fragment>
-              <AccuracySidebar target={level.words[currentIdx]?.word} userInput={userAttempts[currentIdx]} score={results[currentIdx]} />
-              <div style={{ color: results[currentIdx] >= 75 ? "var(--accent-color)" : "var(--primary-color)", marginTop: 16, fontWeight: 600 }}>
+            <>
+              <AccuracySidebar
+                target={level.words[currentIdx]?.word}
+                userInput={userAttempts[currentIdx]}
+                score={results[currentIdx]}
+              />
+              <div style={{
+                color: results[currentIdx] >= 75 ? "var(--accent-color)" : "var(--primary-color)",
+                marginTop: 16,
+                fontWeight: 600
+              }}>
                 {results[currentIdx] >= 75 ? "Correct!" : "Keep practicing!"}
               </div>
               <button
@@ -245,7 +277,7 @@ function ChallengePage() {
               >
                 {currentIdx === totalWords - 1 ? "Finish Test" : "Next Word"}
               </button>
-            </React.Fragment>
+            </>
           )}
         </div>
       </div>
@@ -258,17 +290,23 @@ function ChallengePage() {
         <h2>Level {level.level} Test Review</h2>
         <ul style={{ fontSize: "1.1rem", listStyle: "none", padding: 0 }}>
           {level.words.map((entry, i) => (
-            <li key={(entry.word || "") + "-" + i} style={{
+            <li key={(entry.translation ?? "") + "-" + i} style={{
               color: results[i] >= 75 ? "var(--accent-color)" : "var(--primary-color)",
               padding: "5px 0",
               display: "flex",
               alignItems: "center",
-              gap: "10px",
+              gap: "10px"
             }}>
               <b>{i + 1}.</b>
-              <span style={{ minWidth: 105, fontWeight: 600 }}>{entry.word}</span>
-              <span style={{ color: "#666", minWidth: 100, marginLeft: 6, fontStyle: "italic", fontWeight: 400 }}>
-                ({entry.translation})
+              <span style={{ minWidth: 105, fontWeight: 600 }}>{entry.translation}</span>
+              <span style={{
+                color: "#666",
+                minWidth: 100,
+                marginLeft: 6,
+                fontStyle: "italic",
+                fontWeight: 400
+              }}>
+                ({baseLanguage?.label || "Base Language"})
               </span>
               <span style={{
                 fontStyle: "italic",
@@ -278,6 +316,14 @@ function ChallengePage() {
               }}>
                 {userAttempts[i]}
               </span>
+              <span style={{
+                marginLeft: "10px",
+                color: "#999",
+                fontWeight: 400,
+                fontSize: "1em"
+              }}>
+                <span>Correct: <b>{entry.word}</b></span>
+              </span>
               <span>
                 {results[i] !== null ? `${results[i]}%` : ""}
                 {results[i] >= 75 ? " ✔️" : " ❌"}
@@ -285,7 +331,11 @@ function ChallengePage() {
             </li>
           ))}
         </ul>
-        <button className="btn btn-accent" style={{ marginTop: 24 }} onClick={handleTestSubmit}>
+        <button
+          className="btn btn-accent"
+          style={{ marginTop: 24 }}
+          onClick={handleTestSubmit}
+        >
           Submit & See Result
         </button>
       </div>
@@ -293,8 +343,7 @@ function ChallengePage() {
 
   // Final test result after record
   if (showReview === "submit") {
-    // Find the percent correct
-    const numPassed = results && results.length > 0 ? results.filter(s => s !== null && s >= 75).length : 0;
+    const numPassed = results && results.length > 0 ? results.filter((s) => s !== null && s >= 75).length : 0;
     const percent = Math.round((numPassed / totalWords) * 100);
     const passed = percent >= 75;
 
@@ -307,15 +356,23 @@ function ChallengePage() {
           color: passed ? "var(--accent-color)" : "var(--primary-color)",
           fontWeight: 700
         }}>
-          {passed ? `✅ Congratulations! You passed with ${percent}% accuracy.` : `❌ Unfortunately, you got only ${percent}%. Try again.`}
+          {passed
+            ? `✅ Congratulations! You passed with ${percent}% accuracy.`
+            : `❌ Unfortunately, you got only ${percent}%. Try again.`}
         </div>
         <div style={{ marginTop: 28 }}>
           {passed ? (
-            <button className="btn btn-primary" onClick={() => navigate(`/lesson/${level.level + 1}`)}>
+            <button
+              className="btn btn-primary"
+              onClick={() => navigate(`/lesson/${level.level + 1}`)}
+            >
               Next Level
             </button>
           ) : (
-            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+            <button
+              className="btn btn-primary"
+              onClick={() => window.location.reload()}
+            >
               Retry Level Test
             </button>
           )}
@@ -326,4 +383,5 @@ function ChallengePage() {
 
   return null;
 }
+
 export default ChallengePage;
