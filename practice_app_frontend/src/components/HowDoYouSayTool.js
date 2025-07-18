@@ -16,14 +16,15 @@ function HowDoYouSayTool({ hidden }) {
   const [error, setError] = useState(null);
   const [multiWordInfo, setMultiWordInfo] = useState(""); // For user feedback
 
-  // Expanded local fallback: tries mapped vocab, then tries matching whole sentence as a phrase
+  // Simplified local fallback: only checks for an exact, entire phrase match in vocab (no splitting)
   const vocabMap = require("../context/ProgressContext.js").LANGUAGE_VOCAB || {};
   const targetWords = vocabMap[selectedLanguage?.code] || [];
   const baseWords = vocabMap[baseLanguage?.code] || [];
   function fallbackTranslate(inputText) {
     if (!inputText) return { translation: "", spoken: "" };
     const normalized = inputText.trim().toLowerCase();
-    // Try whole phrase/sentence match first
+
+    // Try whole phrase/sentence match first (never split)
     let idx = baseWords.findIndex(w => w.toLowerCase() === normalized);
     if (idx !== -1) {
       return {
@@ -38,44 +39,8 @@ function HowDoYouSayTool({ hidden }) {
         spoken: baseWords[idx] || ""
       };
     }
-    // If it's a phrase/sentence, attempt partial lookup for each word
-    const words = normalized.split(/\s+/);
-    if (words.length > 1) {
-      // Assemble fallback phrase translation if words in local vocab
-      let translatedArr = [];
-      for (let word of words) {
-        let bIdx = baseWords.findIndex(w => w.toLowerCase() === word);
-        if (bIdx !== -1) {
-          translatedArr.push(targetWords[bIdx] || word);
-        } else {
-          translatedArr.push(word);
-        }
-      }
-      const fallbackJoined = translatedArr.join(" ");
-      if (fallbackJoined !== normalized) {
-        return {
-          translation: fallbackJoined,
-          spoken: fallbackJoined
-        };
-      }
-    }
-    // Try searching by word (classic fallback)
-    for (let word of words) {
-      idx = baseWords.findIndex(w => w.toLowerCase() === word);
-      if (idx !== -1) {
-        return {
-          translation: targetWords[idx] || "(Not available in local dictionary)",
-          spoken: targetWords[idx] || ""
-        };
-      }
-      idx = targetWords.findIndex(w => w.toLowerCase() === word);
-      if (idx !== -1) {
-        return {
-          translation: baseWords[idx] || "(Not available in local dictionary)",
-          spoken: baseWords[idx] || ""
-        };
-      }
-    }
+
+    // No internal splitting or partial translation at all
     return {
       translation: "(No translation found)",
       spoken: ""
@@ -180,7 +145,7 @@ function HowDoYouSayTool({ hidden }) {
       // Fallback: local mapping with best effort
       const fallback = fallbackTranslate(trimmedInput);
       setResult(fallback);
-      // User feedback specific for multi-word attempts
+      // User feedback only for total miss or not found
       if (
         isMultiWordOrSentence &&
         (fallback.translation === "(No translation found)" ||
@@ -190,14 +155,6 @@ function HowDoYouSayTool({ hidden }) {
           "Could not translate the full sentence or phrase. Try rewording, simplifying, or check your spelling."
         );
         setMultiWordInfo("(Phrase/sentence translation not found in offline vocab.)");
-      } else if (
-        fallback.translation !== trimmedInput &&
-        isMultiWordOrSentence
-      ) {
-        setMultiWordInfo(
-          "Partial phrase translation (some words replaced locally, others unchanged)."
-        );
-        setError(null);
       } else if (
         fallback.translation === "(No translation found)" ||
         fallback.translation === "(Not available in local dictionary)"
@@ -390,10 +347,11 @@ function HowDoYouSayTool({ hidden }) {
         }}
       >
         You can translate any word, phrase, or full sentence (not just those in your lesson).<br />
+        The entire text you enter is translated as a complete phrase—no splitting or partial translation.<br />
         Online translation uses a public API when available.
         <span style={{ color: "#e87a41" }}>
           {" "}
-          (Results may vary. Multi-word phrase translations are supported!)
+          (Results may vary. Full-phrase and sentence translations are supported!)
         </span>
       </div>
     </div>
