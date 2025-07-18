@@ -5,10 +5,11 @@ import "../App.css";
 
 // PUBLIC_INTERFACE
 function Dashboard() {
-  const { stats, selectedLanguage } = useProgress();
+  const { stats, selectedLanguage, getDueAdaptiveReview, markAdaptiveReviewWordSuccess, removeAdaptiveReviewWord } = useProgress();
   const { xp, dailyStreak, badges, BADGES } = useGamification();
 
   const badgeData = BADGES.filter(b => badges.includes(b.id));
+  const reviewWords = getDueAdaptiveReview ? getDueAdaptiveReview() : [];
 
   return (
     <div className="dashboard-container">
@@ -49,6 +50,50 @@ function Dashboard() {
           </span>
         ))}
       </div>
+      {/* ---- Adaptive Review Section ---- */}
+      {reviewWords.length > 0 && (
+        <div style={{
+          marginTop: 30,
+          background: "#eaf9fa",
+          borderRadius: 8,
+          padding: "14px 18px",
+          border: "1px solid #d3fada"
+        }}>
+          <h3 style={{ color: "var(--primary-color)", margin: "2px 0 8px 0", fontWeight: 700, fontSize: "1.07rem" }}>
+            Review Trouble Words
+            <span style={{ marginLeft: 6, fontSize: "1.12em", color: "#ff8617" }}>🕓</span>
+          </h3>
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {reviewWords.map((entry, i) =>
+              <li key={entry.word + "::" + entry.translation + "::" + entry.idx}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 11,
+                    marginBottom: 6,
+                    borderBottom: "1px dashed #ccc", paddingBottom: 2
+                  }}>
+                <span style={{ minWidth: 70, fontWeight: 600, color: "var(--accent-color)" }}>{entry.word}</span>
+                <span style={{ color: "#8aa", fontStyle: "italic", minWidth: 70 }}>({entry.translation})</span>
+                <button
+                  className="btn btn-accent"
+                  style={{ padding: "2px 13px", fontSize: "0.96em", marginLeft: 10 }}
+                  title="Mark as mastered (remove from review)"
+                  onClick={() => removeAdaptiveReviewWord(entry.word, entry.translation, entry.idx)}
+                >✓ Mastered</button>
+                <button
+                  className="btn btn-primary"
+                  style={{ padding: "2px 13px", fontSize: "0.96em", marginLeft: 4 }}
+                  title="Mark as reviewed now (schedule for later)"
+                  onClick={() => markAdaptiveReviewWordSuccess(entry.word, entry.translation, entry.idx)}
+                >Reviewed</button>
+              </li>
+            )}
+          </ul>
+          <div style={{ color: "var(--primary-color)", marginTop: 7, fontSize: "0.98em" }}>
+            Practice these difficult words now! <b>Repeat aloud</b> and click <span style={{ fontWeight: 700 }}>Reviewed</span> after you practice.
+          </div>
+        </div>
+      )}
+      {/* ---- End Adaptive Review ---- */}
       <div style={{marginTop:16, color:"var(--accent-color)"}}>
         {stats.progressPercent < 100 ? "Keep going—your next speaking challenge awaits!" : "Congratulations! Try a harder level or a new language."}
       </div>

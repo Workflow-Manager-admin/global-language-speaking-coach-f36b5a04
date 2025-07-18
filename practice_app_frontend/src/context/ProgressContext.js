@@ -152,6 +152,22 @@ export function ProgressProvider({ children }) {
     );
   });
 
+  // ---- Adaptive Review State ---- //
+  const reviewKey =
+    baseLanguage && selectedLanguage
+      ? `adaptive_review_${baseLanguage.code}_${selectedLanguage.code}`
+      : "adaptive_review_en_es";
+  const [adaptiveReview, setAdaptiveReview] = useState(() => {
+    const cached = localStorage.getItem(reviewKey);
+    if (cached) return JSON.parse(cached);
+    return []; // [{word, translation, idx, lastWrong, nextReview, interval}]
+  });
+
+  // Persist adaptive review queue to localStorage
+  useEffect(() => {
+    localStorage.setItem(reviewKey, JSON.stringify(adaptiveReview));
+  }, [adaptiveReview, reviewKey]);
+
   // When levels, base, or target changes, update the correct localStorage keys
   useEffect(() => {
     const key =
@@ -166,6 +182,11 @@ export function ProgressProvider({ children }) {
   useEffect(() => {
     localStorage.setItem("baseLanguage", JSON.stringify(baseLanguage));
   }, [baseLanguage]);
+  useEffect(() => {
+    // Clear trouble words if language changes
+    setAdaptiveReview([]);
+    // eslint-disable-next-line
+  }, [baseLanguage?.code, selectedLanguage?.code]);
 
   // When user switches the base or study language, reset (or load) the appropriate level data
   function handleSetSelectedLanguage(langObj) {
@@ -185,6 +206,8 @@ export function ProgressProvider({ children }) {
         10
       ));
     }
+    // also reset review words
+    setAdaptiveReview([]);
   }
   function handleSetBaseLanguage(langObj) {
     setBaseLanguage(langObj);
@@ -203,6 +226,8 @@ export function ProgressProvider({ children }) {
         10
       ));
     }
+    // also reset review words
+    setAdaptiveReview([]);
   }
 
   // --- Skill Tree Prerequisite State ---
@@ -238,8 +263,15 @@ export function ProgressProvider({ children }) {
       });
     }
   }
+
   // PUBLIC_INTERFACE
-  function markLevelTestScore(levelNumber, score) {
+  /**
+   * Record the test score for a level, and record trouble words for adaptive review.
+   * @param {number} levelNumber 
+   * @param {number} score 
+   * @param {Array<Object>} [resultsPerWord] - Optional, array of {word, userAttempt, correct, score, translation, idx} for each word
+   */
+  function markLevelTestScore(levelNumber, score, resultsPerWord = null) {
     const passed = score >= 75;
     setLevels(lvs => {
       const idx = lvs.findIndex(l => l.level === +levelNumber);
@@ -249,6 +281,85 @@ export function ProgressProvider({ children }) {
       if (passed) copy[idx].complete = true;
       return copy;
     });
+
+    // If resultsPerWord provided, update error/trouble words in adaptive review.
+    if (Array.isArray(resultsPerWord)) {
+      const now = Date.now();
+      setAdaptiveReview(prev => {
+        let newQueue = [...prev];
+        for (let i = 0; i < resultsPerWord.length; ++i) {
+          const { word, correct, translation, idx, score: wordScore } = resultsPerWord[i];
+          if (wordScore == null || wordScore >= 75) continue; // Only add if incorrect
+          // Find if it exists
+          const existingIdx = newQueue.findIndex(w =>
+            w.word === word &&
+            w.translation === translation &&
+            w.idx === idx
+          );
+          if (existingIdx >= 0) {
+            // Already exists, update timings (spacing effect)
+            let entry = { ...newQueue[existingIdx] };
+            entry.lastWrong = now;
+            if (!entry.interval) entry.interval = 1.5 * 60 * 60 * 1000; // 1.5 hours
+            else entry.interval = Math.min(entry.interval * 2.2, 7 * 24 * 60 * 60 * 1000); // up to 1 week
+            entry.nextReview = now + entry.interval;
+            newQueue[existingIdx] = entry;
+          } else {
+            newQueue.push({
+              word,
+              translation,
+              idx,
+              lastWrong: now,
+              interval: 1.5 * 60 * 60 * 1000, // 1.5hrs
+              nextReview: now + 1.5 * 60 * 60 * 1000
+            });
+          }
+        }
+        // Remove duplicates
+        const seen = {};
+        newQueue = newQueue.filter(e => {
+          const key = `${e.word}::${e.translation}::${e.idx}`;
+          if (seen[key]) return false;
+          seen[key] = true;
+          return true;
+        });
+        return newQueue;
+      });
+    }
+  }
+
+  // PUBLIC_INTERFACE
+  /**
+   * Mark that user practiced a trouble word, so update its review interval (spaced repetition success)
+   * @param {string} word
+   * @param {string} translation
+   * @param {number} idx
+   */
+  function markAdaptiveReviewWordSuccess(word, translation, idx) {
+    setAdaptiveReview(prev => {
+      const now = Date.now();
+      let nextQueue = prev.map(entry => {
+        if (entry.word === word && entry.translation === translation && entry.idx === idx) {
+          let interval = entry.interval ? entry.interval * 2.1 : 2 * 60 * 60 * 1000;
+          interval = Math.min(interval, 10 * 24 * 60 * 60 * 1000); // up to 10 days
+          return {
+            ...entry,
+            interval,
+            lastWrong: now,
+            nextReview: now + interval
+          };
+        }
+        return entry;
+      });
+      // Optionally remove if succeeded n times (not implemented here)
+      return nextQueue;
+    });
+  }
+  // Remove a word from review completely
+  function removeAdaptiveReviewWord(word, translation, idx) {
+    setAdaptiveReview(prev => prev.filter(entry =>
+      !(entry.word === word && entry.translation === translation && entry.idx === idx)
+    ));
   }
 
   // Progress stats
@@ -272,6 +383,17 @@ export function ProgressProvider({ children }) {
     challenged: l.testScore !== null
   }));
 
+  // PUBLIC_INTERFACE
+  // Expose adaptive review words due for dashboard
+  function getDueAdaptiveReview() {
+    const now = Date.now();
+    // Only review 3-5 at a time, sorted by nextReview time
+    return adaptiveReview
+      .filter(w => w.nextReview <= now)
+      .sort((a, b) => a.nextReview - b.nextReview)
+      .slice(0, 5);
+  }
+
   return (
     <ProgressContext.Provider
       value={{
@@ -286,6 +408,11 @@ export function ProgressProvider({ children }) {
         nextAvailableLevel,
         beginLevelPractice,
         markLevelTestScore,
+        // Adaptive review
+        getDueAdaptiveReview,
+        markAdaptiveReviewWordSuccess,
+        removeAdaptiveReviewWord,
+        troubleWords: adaptiveReview,
       }}
     >
       {children}

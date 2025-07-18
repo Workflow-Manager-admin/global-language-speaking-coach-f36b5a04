@@ -197,7 +197,18 @@ function ChallengePage() {
   const handleTestSubmit = () => {
     const numPassed = results.filter((s) => s !== null && s >= 75).length;
     const percent = Math.round((numPassed / totalWords) * 100);
-    markLevelTestScore(level.level, percent);
+
+    // -- NEW: construct per-word result summary for adaptive review --
+    const perWordResults = level.words.map((entry, idx) => ({
+      word: entry.word,
+      translation: entry.translation,
+      idx: entry.idx,
+      userAttempt: userAttempts[idx] ?? "",
+      correct: results[idx] !== null && results[idx] >= 75,
+      score: results[idx]
+    }));
+
+    markLevelTestScore(level.level, percent, perWordResults);
 
     // --- Gamification triggers ---
     let xpGain = percent >= 75 ? 20 : 5;
