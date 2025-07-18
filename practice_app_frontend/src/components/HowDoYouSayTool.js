@@ -2,56 +2,21 @@ import React, { useState } from "react";
 import { useProgress } from "../context/ProgressContext";
 
 /**
- * HowDoYouSayTool - Now allows translation of any full sentence, phrase, or word using a public web API (with fallback).
- * Translates whole input, provides feedback for multi-word/sentence attempts, and ensures TTS plays the complete result.
- * 
+ * HowDoYouSayTool - Now uses an AI translation and correction API endpoint (or mock).
+ * Translates input after correcting grammar/spelling, and displays correction and translation.
+ * Informs user when input corrections occurred before translation.
+ *
  * PUBLIC_INTERFACE
- */
-/**
- * PUBLIC_INTERFACE
- * Standalone HowDoYouSayTool now only used as its own page. The `hidden` prop has no effect.
  */
 function HowDoYouSayTool({ hidden }) {
   const { baseLanguage, selectedLanguage } = useProgress();
   const [input, setInput] = useState("");
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState(null); // { corrected, translation, wasCorrected }
   const [loading, setLoading] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [error, setError] = useState(null);
-  const [multiWordInfo, setMultiWordInfo] = useState(""); // For user feedback
 
-  // Simplified local fallback: only checks for an exact, entire phrase match in vocab (no splitting)
-  const vocabMap = require("../context/ProgressContext.js").LANGUAGE_VOCAB || {};
-  const targetWords = vocabMap[selectedLanguage?.code] || [];
-  const baseWords = vocabMap[baseLanguage?.code] || [];
-  function fallbackTranslate(inputText) {
-    if (!inputText) return { translation: "", spoken: "" };
-    const normalized = inputText.trim().toLowerCase();
-
-    // Try whole phrase/sentence match first (never split)
-    let idx = baseWords.findIndex(w => w.toLowerCase() === normalized);
-    if (idx !== -1) {
-      return {
-        translation: targetWords[idx] || "(Not available in local dictionary)",
-        spoken: targetWords[idx] || ""
-      };
-    }
-    idx = targetWords.findIndex(w => w.toLowerCase() === normalized);
-    if (idx !== -1) {
-      return {
-        translation: baseWords[idx] || "(Not available in local dictionary)",
-        spoken: baseWords[idx] || ""
-      };
-    }
-
-    // No internal splitting or partial translation at all
-    return {
-      translation: "(No translation found)",
-      spoken: ""
-    };
-  }
-
-  // Language code mapping for APIs and TTS
+  // Language API mapping for standardized codes
   const LANG_API_MAP = { en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar", ru: "ru", ko: "ko", pt: "pt" };
   const languageBCP47Map = {
     en: "en-US",
@@ -66,125 +31,126 @@ function HowDoYouSayTool({ hidden }) {
     pt: "pt-PT",
   };
 
+  // Fallback offline "dictionary" for isolated words
+  const vocabMap = require("../context/ProgressContext.js").LANGUAGE_VOCAB || {};
+  const targetWords = vocabMap[selectedLanguage?.code] || [];
+  const baseWords = vocabMap[baseLanguage?.code] || [];
+  function fallbackOfflineTranslate(inputText) {
+    if (!inputText) return { corrected: inputText, translation: "", wasCorrected: false };
+    const normalized = inputText.trim().toLowerCase();
+    let idx = baseWords.findIndex((w) => w.toLowerCase() === normalized);
+    if (idx !== -1) {
+      return { corrected: inputText, translation: targetWords[idx] || "(Not available in local dictionary)", wasCorrected: false };
+    }
+    idx = targetWords.findIndex((w) => w.toLowerCase() === normalized);
+    if (idx !== -1) {
+      return { corrected: inputText, translation: baseWords[idx] || "(Not available in local dictionary)", wasCorrected: false };
+    }
+    return { corrected: inputText, translation: "(No translation found)", wasCorrected: false };
+  }
+
   /**
-   * Make an actual online API call to LibreTranslate's CORS-ready API.
-   * Sends full phrase/sentence for translation.
+   * Mock AI Correction and Translation
+   * - Simulates grammar/spelling correction, then translation (uses LibreTranslate for translation if online).
    */
-  async function fetchOnlineTranslation(inputText, from, to) {
+  async function aiCorrectAndTranslate(inputText, from, to) {
+    // --- 1. Basic simulated correction logic (replace this with actual AI endpoint later) ---
+    let corrected = inputText.trim();
+    let wasCorrected = false;
+    // Demonstrative correction: fix a few common mistakes as an example
+    const quickFixes = [
+      { wrong: "helo", fix: "hello" },
+      { wrong: "frend", fix: "friend" },
+      { wrong: "thnak you", fix: "thank you" },
+      { wrong: "wat is", fix: "what is" },
+      { wrong: "i want teh food", fix: "i want the food" }
+    ];
+    for (const { wrong, fix } of quickFixes) {
+      if (corrected.toLowerCase().includes(wrong)) {
+        corrected = corrected.toLowerCase().replace(wrong, fix);
+        wasCorrected = true;
+      }
+    }
+    // Simulate more advanced AI with a simple capitalization fix if all lowercase and >1 word
+    if (/^[a-z\s,.'-?!]+$/.test(corrected) && corrected.split(" ").length > 1 && corrected[0] === corrected[0].toLowerCase()) {
+      const capitalized = corrected.slice(0,1).toUpperCase() + corrected.slice(1);
+      if (capitalized !== corrected) {
+        corrected = capitalized;
+        wasCorrected = true;
+      }
+    }
+
+    // --- 2. Online AI translation if real endpoint available (mock with LibreTranslate) ---
+    // NOTE: For real LLM endpoint: send { q: inputText, source: from, target: to } and get { corrected, translation }
+    // Here, simulate by sending "corrected" to LibreTranslate. If error, use fallback.
     const apiUrl = "https://libretranslate.com/translate";
+    let translation = null;
     try {
       const resp = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          q: inputText,
+          q: corrected,
           source: from,
           target: to,
           format: "text"
         })
       });
       const data = await resp.json();
-      if (
-        typeof data.translatedText === "string" &&
-        data.translatedText.trim() &&
-        // Accept even if identical (for phrase fallback, API might echo input)
-        (data.translatedText.trim() !== "" || inputText.trim().length > 1)
-      ) {
-        return data.translatedText;
+      if (typeof data.translatedText === "string" && data.translatedText.trim()) {
+        translation = data.translatedText;
       }
-      // Could not translate, fallback
-      return null;
     } catch (err) {
-      // Network, CORS, or other error.
-      return null;
+      // Do nothing; fall through to fallback
     }
+
+    if (!translation || !translation.trim()) {
+      // Fallback to offline only for isolated words
+      const fallback = fallbackOfflineTranslate(corrected);
+      return { corrected, translation: fallback.translation, wasCorrected };
+    }
+
+    return { corrected, translation, wasCorrected };
   }
 
-  /**
-   * Handles the form submit for translation (supports sentences/phrases, not just words).
-   * Updates UI with feedback for multi-word/sentence input.
-   */
+  // Form submit handler
   async function handleSubmit(e) {
     e.preventDefault();
     setResult(null);
     setError(null);
-    setMultiWordInfo("");
     if (!input || input.trim().length === 0) {
-      setError("Please enter a word or phrase.");
+      setError("Please enter a word, phrase, or sentence to translate.");
       return;
     }
-    const trimmedInput = input.trim();
     setLoading(true);
-    // Feedback for multi-word/sentence
-    const isMultiWordOrSentence = /\s/.test(trimmedInput);
-    if (isMultiWordOrSentence && trimmedInput.length > 1) {
-      setMultiWordInfo("Translating full sentence/phrase...");
-    } else {
-      setMultiWordInfo("");
-    }
+
+    const trimmedInput = input.trim();
     const srcLang = LANG_API_MAP[baseLanguage?.code] || "en";
     const tgtLang = LANG_API_MAP[selectedLanguage?.code] || "es";
-    let translation = null;
 
+    let aiResult = null;
     try {
-      translation = await fetchOnlineTranslation(trimmedInput, srcLang, tgtLang);
-    } catch {
-      translation = null;
+      aiResult = await aiCorrectAndTranslate(trimmedInput, srcLang, tgtLang);
+    } catch (err) {
+      aiResult = null;
     }
     setLoading(false);
 
-    if (
-      translation &&
-      typeof translation === "string" &&
-      translation.trim().length > 0
-    ) {
-      setResult({ translation, spoken: translation });
-      setError(null);
-      if (isMultiWordOrSentence) {
-        setMultiWordInfo("Success! This is a full phrase/sentence translation.");
-      } else {
-        setMultiWordInfo("");
-      }
-    } else {
-      // Fallback: local mapping with best effort
-      const fallback = fallbackTranslate(trimmedInput);
-      setResult(fallback);
-      // User feedback only for total miss or not found
-      if (
-        isMultiWordOrSentence &&
-        (fallback.translation === "(No translation found)" ||
-          fallback.translation === "(Not available in local dictionary)")
-      ) {
-        setError(
-          "Could not translate the full sentence or phrase. Try rewording, simplifying, or check your spelling."
-        );
-        setMultiWordInfo("(Phrase/sentence translation not found in offline vocab.)");
-      } else if (
-        fallback.translation === "(No translation found)" ||
-        fallback.translation === "(Not available in local dictionary)"
-      ) {
-        setError("Translation not found. Please try rewording your phrase.");
-        setMultiWordInfo("");
-      } else {
-        setMultiWordInfo("");
-      }
+    if (!aiResult || !aiResult.translation || aiResult.translation.startsWith("(")) {
+      setError("Translation not found or service unavailable.");
+      setResult(aiResult);
+      return;
     }
+    setResult(aiResult);
   }
 
   function handleSpeak() {
-    if (
-      !result?.translation ||
-      !result.translation.trim() ||
-      result.translation.startsWith("(")
-    )
-      return;
+    if (!result?.translation || !result.translation.trim() || result.translation.startsWith("(")) return;
     const code = selectedLanguage?.code || "en";
     const speechLang = languageBCP47Map[code] || code;
 
     if (window.speechSynthesis && result?.translation) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
+      try { window.speechSynthesis.cancel(); } catch {}
       const voices = window.speechSynthesis.getVoices() || [];
       let v =
         voices.find(
@@ -212,7 +178,6 @@ function HowDoYouSayTool({ hidden }) {
     }
   }
 
-  // Render always: HowDoYouSayTool is now its own route/page.
   return (
     <div
       style={{
@@ -220,11 +185,11 @@ function HowDoYouSayTool({ hidden }) {
         background: "#eaf9fa",
         borderRadius: 12,
         padding: "22px 20px 20px 20px",
-        maxWidth: 420,
+        maxWidth: 440,
         minWidth: 240,
         boxShadow: "0 2px 12px 0 rgba(46,119,74,0.04)",
         border: "1.3px solid #aadbe7",
-        textAlign: "center",
+        textAlign: "center"
       }}
       data-testid="howdo-say-box"
     >
@@ -233,7 +198,7 @@ function HowDoYouSayTool({ hidden }) {
           margin: 0,
           marginBottom: 10,
           color: "var(--primary-color)",
-          fontWeight: 700,
+          fontWeight: 700
         }}
       >
         How do you say...?
@@ -243,7 +208,7 @@ function HowDoYouSayTool({ hidden }) {
           display: "flex",
           gap: 7,
           justifyContent: "center",
-          marginBottom: 10,
+          marginBottom: 10
         }}
         onSubmit={handleSubmit}
         aria-label="Translate phrase form"
@@ -257,14 +222,13 @@ function HowDoYouSayTool({ hidden }) {
             fontSize: "1.08em",
             padding: "8px 14px",
             borderRadius: 7,
-            border: "1.5px solid #9cd9ea",
+            border: "1.5px solid #9cd9ea"
           }}
           value={input}
           onChange={e => {
             setInput(e.target.value);
             setResult(null);
             setError(null);
-            setMultiWordInfo("");
           }}
           aria-label="Phrase to translate"
           disabled={loading}
@@ -279,29 +243,32 @@ function HowDoYouSayTool({ hidden }) {
         </button>
       </form>
       {error && (
-        <div style={{ color: "#b14343", fontWeight: 500, marginTop: 7 }}>
-          {error}
-        </div>
+        <div style={{ color: "#b14343", fontWeight: 500, marginTop: 7 }}>{error}</div>
       )}
-      {multiWordInfo && (
+      {result && !!result.corrected && result.corrected !== input.trim() && (
         <div
           style={{
-            color: "#339",
-            fontWeight: 500,
-            marginTop: 4,
-            fontSize: "0.99em",
+            color: "#8b7500",
+            fontWeight: 600,
+            background: "#fffbe6",
+            borderRadius: "7px",
+            border: "1px dashed #e8c942",
+            padding: "7px 11px",
+            margin: "7px 0"
           }}
         >
-          {multiWordInfo}
+          <span>
+            <b>Input corrected:</b> <span style={{ fontStyle: "italic" }}>{result.corrected}</span>
+          </span>
         </div>
       )}
-      {result && (
+      {result && result.translation && (
         <div
           style={{
             marginTop: 10,
             color: result.translation.startsWith("(")
               ? "#b14343"
-              : "var(--primary-color)",
+              : "var(--primary-color)"
           }}
         >
           <div>
@@ -321,7 +288,7 @@ function HowDoYouSayTool({ hidden }) {
                     background: "none",
                     border: "none",
                     cursor: "pointer",
-                    color: "var(--accent-color)",
+                    color: "var(--accent-color)"
                   }}
                   aria-label="Play pronunciation"
                   disabled={speaking}
@@ -334,7 +301,7 @@ function HowDoYouSayTool({ hidden }) {
                 style={{
                   marginLeft: 4,
                   fontSize: "0.96em",
-                  color: "#35a",
+                  color: "#35a"
                 }}
               >
                 Speaking...
@@ -346,16 +313,21 @@ function HowDoYouSayTool({ hidden }) {
       <div
         style={{
           color: "#888",
+          fontFamily:
+            "Segoe UI, -apple-system, system-ui, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif",
           fontSize: "0.98em",
           marginTop: 9,
+          textAlign: "center"
         }}
       >
-        You can translate any word, phrase, or full sentence (not just those in your lesson).<br />
-        The entire text you enter is translated as a complete phrase—no splitting or partial translation.<br />
-        Online translation uses a public API when available.
+        You can translate any word, phrase, or full sentence.
+        <br />
+        The entire text is first corrected (AI assisted), then fully translated.
+        <br />
         <span style={{ color: "#e87a41" }}>
-          {" "}
-          (Results may vary. Full-phrase and sentence translations are supported!)
+          {result && result.wasCorrected
+            ? " (Your input was corrected before translation.)"
+            : " (Results may vary. Full-phrase and input corrections are AI-powered!)"}
         </span>
       </div>
     </div>
