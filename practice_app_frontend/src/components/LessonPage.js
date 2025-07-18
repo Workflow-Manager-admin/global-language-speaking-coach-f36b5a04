@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProgress } from "../context/ProgressContext";
 import { useGamification } from "../context/GamificationContext";
+import ExplainMyAnswer from "./ExplainMyAnswer";
 import "../App.css";
 
 /**
@@ -329,15 +330,48 @@ function LessonPage() {
             </span>
           )}
         </div>
-        {microExplanation[idx] && (
-          <div style={{
-            color: microResults[idx] ? "var(--accent-color)" : "#b14343",
-            marginTop: 6,
-            fontSize: "1.01em",
-            fontStyle: "italic",
-            minHeight: 17,
-            transition: "color .2s"
-          }}>
+        {/* EXPLAIN MY ANSWER UI */}
+        {microResults[idx] === false && userInputs[idx] && (
+          <div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ marginTop: 8, marginBottom: 2, padding: "5px 14px", fontSize: "0.97em" }}
+              onClick={() => {
+                setMicroExplanation((arr) => {
+                  const newArr = [...arr];
+                  newArr[idx] =
+                    newArr[idx] && newArr[idx].startsWith("WHY-")
+                      ? ""
+                      : "WHY-" + Date.now();
+                  return newArr;
+                });
+              }}
+              aria-label="Show Explanation"
+            >
+              Explain My Answer
+            </button>
+            {microExplanation[idx] && microExplanation[idx].startsWith("WHY-") ? (
+              <ExplainMyAnswer
+                correct={ml.content.word}
+                userInput={userInputs[idx]}
+                options={{ translation: ml.content.translation }}
+              />
+            ) : null}
+          </div>
+        )}
+
+        {microExplanation[idx] && !microExplanation[idx].startsWith("WHY-") && (
+          <div
+            style={{
+              color: microResults[idx] ? "var(--accent-color)" : "#b14343",
+              marginTop: 6,
+              fontSize: "1.01em",
+              fontStyle: "italic",
+              minHeight: 17,
+              transition: "color .2s",
+            }}
+          >
             {microExplanation[idx]}
           </div>
         )}

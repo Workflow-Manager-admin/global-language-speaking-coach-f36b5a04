@@ -1,9 +1,10 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProgress } from "../context/ProgressContext";
 import { useGamification } from "../context/GamificationContext";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import AccuracySidebar from "./AccuracySidebar";
+import ExplainMyAnswer from "./ExplainMyAnswer";
 import "../App.css";
 
 // PUBLIC_INTERFACE
@@ -50,6 +51,21 @@ function ChallengePage() {
   const [results, setResults] = useState(Array(level?.words?.length || 0).fill(null));
   const [showReview, setShowReview] = useState(false);
   const totalWords = level?.words?.length || 0;
+
+  // EXPLAIN MY ANSWER explanation button states (needs to be at top level!)
+  const [explainStates, setExplainStates] = useState(() =>
+    Array(totalWords).fill(false)
+  );
+  // Reset explainStates if totalWords or levelId changes
+  useEffect(() => {
+    setExplainStates(Array(totalWords).fill(false));
+    // Also reset results/userAttempts if level changes (defensive in case of fast navigation)
+    setUserAttempts(Array(totalWords).fill(""));
+    setResults(Array(totalWords).fill(null));
+    setCurrentIdx(0);
+    setShowReview(false);
+    // eslint-disable-next-line
+  }, [levelId, totalWords]);
 
   const {
     transcript,
@@ -320,44 +336,90 @@ function ChallengePage() {
         <h2>Level {level.level} Test Review</h2>
         <ul style={{ fontSize: "1.1rem", listStyle: "none", padding: 0 }}>
           {level.words.map((entry, i) => (
-            <li key={(entry.translation ?? "") + "-" + i} style={{
-              color: results[i] >= 75 ? "var(--accent-color)" : "var(--primary-color)",
-              padding: "5px 0",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px"
-            }}>
+            <li
+              key={(entry.translation ?? "") + "-" + i}
+              style={{
+                color:
+                  results[i] >= 75
+                    ? "var(--accent-color)"
+                    : "var(--primary-color)",
+                padding: "5px 0",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
+                position: "relative",
+              }}
+            >
               <b>{i + 1}.</b>
-              <span style={{ minWidth: 105, fontWeight: 600 }}>{entry.translation}</span>
-              <span style={{
-                color: "#666",
-                minWidth: 100,
-                marginLeft: 6,
-                fontStyle: "italic",
-                fontWeight: 400
-              }}>
+              <span style={{ minWidth: 105, fontWeight: 600 }}>
+                {entry.translation}
+              </span>
+              <span
+                style={{
+                  color: "#666",
+                  minWidth: 100,
+                  marginLeft: 6,
+                  fontStyle: "italic",
+                  fontWeight: 400,
+                }}
+              >
                 ({baseLanguage?.label || "Base Language"})
               </span>
-              <span style={{
-                fontStyle: "italic",
-                marginLeft: 7,
-                minWidth: 120,
-                color: "#333"
-              }}>
+              <span
+                style={{
+                  fontStyle: "italic",
+                  marginLeft: 7,
+                  minWidth: 120,
+                  color: "#333",
+                }}
+              >
                 {userAttempts[i]}
               </span>
-              <span style={{
-                marginLeft: "10px",
-                color: "#999",
-                fontWeight: 400,
-                fontSize: "1em"
-              }}>
-                <span>Correct: <b>{entry.word}</b></span>
+              <span
+                style={{
+                  marginLeft: "10px",
+                  color: "#999",
+                  fontWeight: 400,
+                  fontSize: "1em",
+                }}
+              >
+                <span>
+                  Correct: <b>{entry.word}</b>
+                </span>
               </span>
               <span>
                 {results[i] !== null ? `${results[i]}%` : ""}
                 {results[i] >= 75 ? " ✔️" : " ❌"}
               </span>
+              {/* EXPLAIN MY ANSWER button only for incorrect */}
+              {results[i] !== null && results[i] < 75 && (
+                <div style={{marginLeft:10, marginTop:6}}>
+                  <button
+                    className="btn btn-primary"
+                    style={{
+                      fontSize: "0.98em",
+                      padding: "4px 12px",
+                    }}
+                    onClick={() => {
+                      setExplainStates((arr) => {
+                        const nn = [...arr];
+                        nn[i] = !nn[i];
+                        return nn;
+                      });
+                    }}
+                  >
+                    {explainStates[i] ? "Hide Explanation" : "Explain My Answer"}
+                  </button>
+                  {explainStates[i] && (
+                    <ExplainMyAnswer
+                      correct={entry.word}
+                      userInput={userAttempts[i]}
+                      options={{ translation: entry.translation }}
+                    />
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
