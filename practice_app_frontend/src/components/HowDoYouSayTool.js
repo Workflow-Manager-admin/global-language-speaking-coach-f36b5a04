@@ -7,6 +7,10 @@ import { useProgress } from "../context/ProgressContext";
  * 
  * PUBLIC_INTERFACE
  */
+/**
+ * PUBLIC_INTERFACE
+ * Standalone HowDoYouSayTool now only used as its own page. The `hidden` prop has no effect.
+ */
 function HowDoYouSayTool({ hidden }) {
   const { baseLanguage, selectedLanguage } = useProgress();
   const [input, setInput] = useState("");
@@ -208,7 +212,7 @@ function HowDoYouSayTool({ hidden }) {
     }
   }
 
-  if (hidden) return null;
+  // Render always: HowDoYouSayTool is now its own route/page.
   return (
     <div
       style={{

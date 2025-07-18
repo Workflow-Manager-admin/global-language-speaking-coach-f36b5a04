@@ -48,18 +48,6 @@ function App() {
               <div className="main-layout">
                 <SideNav />
                 <main className="main-content">
-                  {/* HowDoYouSayTool (hidden in tests/challenges) */}
-                  {(() => {
-                    // Route-aware hiding: Check window.location
-                    const pathname = typeof window !== "undefined" ? window.location.pathname : "";
-                    const isTestMode =
-                      /^\/challenge\/\d+/.test(pathname) ||
-                      /^\/lesson\/\d+/.test(pathname) || // lesson: allow by default, but can fine-tune
-                      /^\/conversation\/\d+/.test(pathname);
-                    return !/^\/challenge\/\d+/.test(pathname) ? (
-                      <HowDoYouSayTool hidden={/^\/challenge\/\d+/.test(pathname)} />
-                    ) : null;
-                  })()}
                   <Routes>
                     <Route path="/login" element={<AuthPage />} />
                     <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
@@ -69,6 +57,8 @@ function App() {
                     <Route path="/conversation/:levelId" element={<RequireAuth><ConversationPage /></RequireAuth>} />
                     <Route path="/challenge/:levelId" element={<RequireAuth><ChallengePage /></RequireAuth>} />
                     <Route path="/progress" element={<RequireAuth><ProgressPage /></RequireAuth>} />
+                    {/* Dedicated How Do You Say route */}
+                    <Route path="/how-do-you-say" element={<RequireAuth><HowDoYouSayTool /></RequireAuth>} />
                     <Route path="*" element={<Navigate replace to="/dashboard" />} />
                   </Routes>
                 </main>

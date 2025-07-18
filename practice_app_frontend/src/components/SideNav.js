@@ -15,6 +15,7 @@ function SideNav() {
       <NavLink to="/skilltree" className={({isActive}) => isActive ? "active" : ""}>🌳 Skill Tree</NavLink>
       <NavLink to="/challenge/1" className={({isActive}) => isActive ? "active" : ""}>🔊 Speaking Challenge</NavLink>
       <NavLink to="/progress" className={({isActive}) => isActive ? "active" : ""}>📊 Progress</NavLink>
+      <NavLink to="/how-do-you-say" className={({isActive}) => isActive ? "active" : ""}>💬 How do you say</NavLink>
     </nav>
   );
 }
