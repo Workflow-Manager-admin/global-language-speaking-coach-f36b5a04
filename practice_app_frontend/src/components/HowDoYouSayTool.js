@@ -1,74 +1,147 @@
 import React, { useState } from "react";
 import { useProgress } from "../context/ProgressContext";
 
-// PUBLIC_INTERFACE
 /**
- * HowDoYouSayTool - Instant phrase/word translator and TTS tool for the user's selected language.
- * Not available in test/challenge screens. Uses local vocabulary for matching, else echoes input.
+ * HowDoYouSayTool - Now allows translation of any word or phrase using a public web API (with fallback).
+ * Safe: Only queries public CORS-compliant API, with robust fallback to local vocabulary or 'Not found' messaging.
+ * Also provides TTS capability in the selected language.
+ * Hidden in challenge/test screens as per design.
+ *
+ * PUBLIC_INTERFACE
  */
 function HowDoYouSayTool({ hidden }) {
   const { baseLanguage, selectedLanguage } = useProgress();
   const [input, setInput] = useState("");
   const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Pull vocabulary lists from ProgressContext (same structure as lesson vocab)
+  // Expanded local fallback: tries mapped vocab, then generic no-found message
   const vocabMap = require("../context/ProgressContext.js").LANGUAGE_VOCAB || {};
   const targetWords = vocabMap[selectedLanguage?.code] || [];
   const baseWords = vocabMap[baseLanguage?.code] || [];
-
-  // Local phrase translation
-  function translate(inputText) {
+  function fallbackTranslate(inputText) {
     if (!inputText) return { translation: "", spoken: "" };
-    // Try to match inputText to baseWords or targetWords
     const normalized = inputText.trim().toLowerCase();
     let idx = baseWords.findIndex(w => w.toLowerCase() === normalized);
     if (idx !== -1) {
       return {
-        translation: targetWords[idx] || "(Not available)",
+        translation: targetWords[idx] || "(Not available in local dictionary)",
         spoken: targetWords[idx] || ""
       };
     }
     idx = targetWords.findIndex(w => w.toLowerCase() === normalized);
     if (idx !== -1) {
       return {
-        translation: baseWords[idx] || "(Not available)",
-        spoken: targetWords[idx] || ""
+        translation: baseWords[idx] || "(Not available in local dictionary)",
+        spoken: baseWords[idx] || ""
       };
     }
-    // Not found, just echo input as fallback (could call API in real app)
+    // Try searching individual words in phrase for partial match
+    for (let word of normalized.split(/\s+/)) {
+      idx = baseWords.findIndex(w => w.toLowerCase() === word);
+      if (idx !== -1) {
+        return {
+          translation: targetWords[idx] || "(Not available in local dictionary)",
+          spoken: targetWords[idx] || ""
+        };
+      }
+      idx = targetWords.findIndex(w => w.toLowerCase() === word);
+      if (idx !== -1) {
+        return {
+          translation: baseWords[idx] || "(Not available in local dictionary)",
+          spoken: baseWords[idx] || ""
+        };
+      }
+    }
     return {
-      translation: "(No translation found in core vocab)",
+      translation: "(No translation found)",
       spoken: ""
     };
   }
 
-  function handleSubmit(e) {
+  // Language code mapping for APIs and TTS
+  const LANG_API_MAP = { en: "en", es: "es", fr: "fr", de: "de", zh: "zh", ja: "ja", ar: "ar", ru: "ru", ko: "ko", pt: "pt" };
+  const languageBCP47Map = {
+    en: "en-US",
+    es: "es-ES",
+    fr: "fr-FR",
+    de: "de-DE",
+    zh: "zh-CN",
+    ja: "ja-JP",
+    ar: "ar-SA",
+    ru: "ru-RU",
+    ko: "ko-KR",
+    pt: "pt-PT",
+  };
+
+  // Actual API call: Uses LibreTranslate (free and public, CORS ready; see https://libretranslate.com/)
+  // Use the free endpoint, falls back to local only if error/network offline
+  async function fetchOnlineTranslation(inputText, from, to) {
+    // We'll use LibreTranslate's free endpoint
+    const apiUrl = "https://libretranslate.com/translate";
+    try {
+      const resp = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          q: inputText,
+          source: from,
+          target: to,
+          format: "text"
+        })
+      });
+      const data = await resp.json();
+      if (typeof data.translatedText === "string" && data.translatedText.trim() && data.translatedText !== inputText) {
+        return data.translatedText;
+      }
+      // Could not translate, fallback
+      return null;
+    } catch (err) {
+      // Network, CORS, or other error.
+      return null;
+    }
+  }
+
+  async function handleSubmit(e) {
     e.preventDefault();
-    if (!input) {
-      setResult(null);
+    setResult(null);
+    setError(null);
+    if (!input || input.trim().length === 0) {
+      setError("Please enter a word or phrase.");
       return;
     }
-    setResult(translate(input));
+    setLoading(true);
+    // Main flow: online API, fallback if error
+    const srcLang = LANG_API_MAP[baseLanguage?.code] || "en";
+    const tgtLang = LANG_API_MAP[selectedLanguage?.code] || "es";
+    let translation = null;
+
+    try {
+      translation = await fetchOnlineTranslation(input.trim(), srcLang, tgtLang);
+    } catch {
+      translation = null;
+    }
+    setLoading(false);
+
+    if (translation && typeof translation === "string" && translation.trim().length > 0) {
+      setResult({ translation, spoken: translation });
+    } else {
+      // Fallback: local mapping (basic demo coverage)
+      const fallback = fallbackTranslate(input);
+      setResult(fallback);
+      if (fallback.translation === "(No translation found)" || fallback.translation === "(Not available in local dictionary)") {
+        setError("Translation not found. Please try rewording your phrase.");
+      }
+    }
   }
 
   function handleSpeak() {
-    if (!result?.translation || result.translation.startsWith("(")) return;
-    // Browser TTS for output in user's TARGET language
-    const languageBCP47Map = {
-      en: "en-US",
-      es: "es-ES",
-      fr: "fr-FR",
-      de: "de-DE",
-      zh: "zh-CN",
-      ja: "ja-JP",
-      ar: "ar-SA",
-      ru: "ru-RU",
-      ko: "ko-KR",
-      pt: "pt-PT",
-    };
+    if (!result?.translation || !result.translation.trim() || result.translation.startsWith("(")) return;
     const code = selectedLanguage?.code || "en";
     const speechLang = languageBCP47Map[code] || code;
+
     if (window.speechSynthesis && result?.translation) {
       try { window.speechSynthesis.cancel(); } catch {}
       const voices = window.speechSynthesis.getVoices() || [];
@@ -131,7 +204,7 @@ function HowDoYouSayTool({ hidden }) {
       >
         <input
           type="text"
-          placeholder={`Enter any word or phrase to translate`}
+          placeholder="Enter any word or phrase to translate"
           style={{
             flex: 1,
             minWidth: 120,
@@ -141,17 +214,22 @@ function HowDoYouSayTool({ hidden }) {
             border: "1.5px solid #9cd9ea"
           }}
           value={input}
-          onChange={e => { setInput(e.target.value); setResult(null); }}
+          onChange={e => { setInput(e.target.value); setResult(null); setError(null); }}
           aria-label="Phrase to translate"
+          disabled={loading}
         />
         <button
           className="btn btn-accent"
           type="submit"
           style={{ minWidth: 75 }}
+          disabled={loading}
         >
-          Translate
+          {loading ? "..." : "Translate"}
         </button>
       </form>
+      {error && (
+        <div style={{ color: "#b14343", fontWeight: 500, marginTop: 7 }}>{error}</div>
+      )}
       {result && (
         <div
           style={{
@@ -180,6 +258,7 @@ function HowDoYouSayTool({ hidden }) {
                   color: "var(--accent-color)"
                 }}
                 aria-label="Play pronunciation"
+                disabled={speaking}
               >
                 🔊
               </button>
@@ -193,7 +272,8 @@ function HowDoYouSayTool({ hidden }) {
         </div>
       )}
       <div style={{ color: "#888", fontSize: "0.98em", marginTop: 9 }}>
-        Type a word from either your language or the one you're learning!
+        You can translate any word or phrase (not just those in your lesson).<br />
+        Online translation uses a public API when available. <span style={{ color: "#e87a41" }}>(Results may vary.)</span>
       </div>
     </div>
   );
