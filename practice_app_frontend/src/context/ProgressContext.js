@@ -4,7 +4,8 @@ import React, { createContext, useContext, useState, useEffect } from "react";
  * Vocabulary: actual translations for each supported language, using
  * human-translated core words/phrases. Per language code, each array aligns positions.
  */
-const LANGUAGE_VOCAB = {
+/** PUBLIC_INTERFACE: Core vocab used by HowDoYouSayTool and lessons */
+export const LANGUAGE_VOCAB = {
   en: [
     "hello", "goodbye", "please", "thank you", "yes", "no", "sorry", "help", "friend", "water",
     "food", "bathroom", "where", "is", "my", "name", "what", "how", "much", "one",
