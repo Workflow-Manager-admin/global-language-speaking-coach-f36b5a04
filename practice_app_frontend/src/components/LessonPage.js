@@ -249,7 +249,8 @@ function LessonPage() {
         <div style={{ margin: "16px 0 0 0", display: "flex", alignItems: "flex-end", gap: 12 }}>
           <input
             style={{
-              fontSize: "1.18em",
+              fontFamily: "Arial, sans-serif",
+              fontSize: "1.08em",
               flex: 3,
               border:
                 microResults[idx] === true
