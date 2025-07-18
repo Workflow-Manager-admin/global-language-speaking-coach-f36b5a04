@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProgress } from "../context/ProgressContext";
+import { useGamification } from "../context/GamificationContext";
 import "../App.css";
 
 // PUBLIC_INTERFACE
@@ -25,6 +26,8 @@ function LessonPage() {
   const [isMarkedPractice, setIsMarkedPractice] = useState(
     !!level?.practiceComplete
   );
+
+  const { awardXP, recordPracticeEvent, unlockBadge } = useGamification();
 
   // Use BCP47 code if possible for TTS
   const languageBCP47Map = {
@@ -60,6 +63,9 @@ function LessonPage() {
   const handlePracticeDone = () => {
     beginLevelPractice(level.level);
     setIsMarkedPractice(true);
+    awardXP(10, "lesson_complete");
+    recordPracticeEvent();
+    if (level.level === 1) unlockBadge("first_lesson");
   };
 
   return (

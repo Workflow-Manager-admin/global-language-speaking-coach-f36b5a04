@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useProgress } from "../context/ProgressContext";
+import { useGamification } from "../context/GamificationContext";
 import useSpeechRecognition from "../hooks/useSpeechRecognition";
 import AccuracySidebar from "./AccuracySidebar";
 import "../App.css";
@@ -24,6 +25,8 @@ function ChallengePage() {
   const levelIdx = levels.findIndex((l) => String(l.level) === String(levelId));
   const level = levels[levelIdx];
   const navigate = useNavigate();
+
+  const { awardXP, recordPracticeEvent, unlockBadge, BADGES } = useGamification();
 
   // Speech recognition for input (should be in target/learning language)
   const languageBCP47Map = {
@@ -195,6 +198,22 @@ function ChallengePage() {
     const numPassed = results.filter((s) => s !== null && s >= 75).length;
     const percent = Math.round((numPassed / totalWords) * 100);
     markLevelTestScore(level.level, percent);
+
+    // --- Gamification triggers ---
+    let xpGain = percent >= 75 ? 20 : 5;
+    awardXP(xpGain, "test");
+    recordPracticeEvent();
+    if (level.level === 1) unlockBadge("first_test");
+
+    // If all levels completed and passed, unlock all-tests badge
+    if (
+      percent >= 75 &&
+      levels.every(l =>
+        (l.level === level.level ? percent >= 75 : (l.testScore && l.testScore.passed))
+      )
+    ) {
+      unlockBadge("all_tests_complete");
+    }
     setShowReview("submit");
   };
 

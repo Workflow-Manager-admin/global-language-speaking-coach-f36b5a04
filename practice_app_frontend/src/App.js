@@ -15,6 +15,7 @@ import SideNav from "./components/SideNav";
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ProgressProvider } from "./context/ProgressContext";
+import { GamificationProvider } from "./context/GamificationContext";
 
 // Theme colors from requirements
 const THEME_COLORS = {
@@ -37,28 +38,30 @@ function App() {
 
   return (
     <AuthProvider>
-      <ProgressProvider>
-        <Router>
-          <div className="app-root">
-            <Header />
-            <div className="main-layout">
-              <SideNav />
-              <main className="main-content">
-                <Routes>
-                  <Route path="/login" element={<AuthPage />} />
-                  <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
-                  <Route path="/language" element={<RequireAuth><LanguageSelector /></RequireAuth>} />
-                  <Route path="/lesson/:levelId" element={<RequireAuth><LessonPage /></RequireAuth>} />
-                  <Route path="/conversation/:levelId" element={<RequireAuth><ConversationPage /></RequireAuth>} />
-                  <Route path="/challenge/:levelId" element={<RequireAuth><ChallengePage /></RequireAuth>} />
-                  <Route path="/progress" element={<RequireAuth><ProgressPage /></RequireAuth>} />
-                  <Route path="*" element={<Navigate replace to="/dashboard" />} />
-                </Routes>
-              </main>
+      <GamificationProvider>
+        <ProgressProvider>
+          <Router>
+            <div className="app-root">
+              <Header />
+              <div className="main-layout">
+                <SideNav />
+                <main className="main-content">
+                  <Routes>
+                    <Route path="/login" element={<AuthPage />} />
+                    <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+                    <Route path="/language" element={<RequireAuth><LanguageSelector /></RequireAuth>} />
+                    <Route path="/lesson/:levelId" element={<RequireAuth><LessonPage /></RequireAuth>} />
+                    <Route path="/conversation/:levelId" element={<RequireAuth><ConversationPage /></RequireAuth>} />
+                    <Route path="/challenge/:levelId" element={<RequireAuth><ChallengePage /></RequireAuth>} />
+                    <Route path="/progress" element={<RequireAuth><ProgressPage /></RequireAuth>} />
+                    <Route path="*" element={<Navigate replace to="/dashboard" />} />
+                  </Routes>
+                </main>
+              </div>
             </div>
-          </div>
-        </Router>
-      </ProgressProvider>
+          </Router>
+        </ProgressProvider>
+      </GamificationProvider>
     </AuthProvider>
   );
 }
