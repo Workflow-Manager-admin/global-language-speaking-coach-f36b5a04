@@ -49,16 +49,16 @@ function App() {
             <div className="main-layout">
               <SideNav />
               <main className="main-content">
-                {/* HowDoYouSayTool (hidden in tests/challenges) */}
-                {(() => {
-                  // Route-aware hiding: Check window.location
-                  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
-                  return !/^\/challenge\/\d+/.test(pathname) ? (
-                    <HowDoYouSayTool hidden={/^\/challenge\/\d+/.test(pathname)} />
-                  ) : null;
-                })()}
                 <Routes>
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route 
+                    path="/dashboard" 
+                    element={
+                      <>
+                        <HowDoYouSayTool hidden={false} />
+                        <Dashboard />
+                      </>
+                    } 
+                  />
                   <Route path="/language" element={<LanguageSelector />} />
                   <Route path="/skilltree" element={<SkillTree />} />
                   <Route path="/lesson/:levelId" element={<LessonPage />} />
