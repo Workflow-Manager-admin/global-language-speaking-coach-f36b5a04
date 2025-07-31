@@ -9,6 +9,7 @@ import "../App.css";
  * PUBLIC_INTERFACE
  * LessonPage presents micro-lessons (short, atomic vocabulary/grammar/speaking activities)
  * to maximize focus, feedback, and engagement. Tracks and displays per-activity state.
+ * Handles multi-language by using the first selectedLanguage as active. (Other support can be added per UX design)
  */
 function LessonPage() {
   const { levelId } = useParams();
@@ -18,6 +19,10 @@ function LessonPage() {
     nextAvailableLevel,
     selectedLanguage,
   } = useProgress();
+
+  // Multi-language support: use first selected for the active language
+  const realSelectedLang = Array.isArray(selectedLanguage) ? selectedLanguage[0] : selectedLanguage;
+
   const levelIdx = levels.findIndex((l) => String(l.level) === String(levelId));
   const level = levels[levelIdx];
   const navigate = useNavigate();
@@ -25,7 +30,7 @@ function LessonPage() {
   // Micro-lessons: [{type, content, completed, id}]
   const microLessons = level?.microLessons || [];
 
-  // State: index of current micro-lesson step
+  // State: index of current micro-lesson
   const [microIdx, setMicroIdx] = useState(0);
 
   // Track user input per micro-lesson
@@ -45,7 +50,7 @@ function LessonPage() {
     Array(microLessons.length || 0).fill(false)
   );
 
-  // Micro-lesson completion state estimate
+  // Micro-lesson completion state
   const allComplete =
     microResults.filter((res) => res === true).length === microLessons.length;
 
@@ -64,12 +69,11 @@ function LessonPage() {
     ko: "ko-KR",
     pt: "pt-PT",
   };
-  const languageCode = selectedLanguage?.code || "en";
+  const languageCode = realSelectedLang?.code || "en";
   const speechLang = languageBCP47Map[languageCode] || languageCode;
 
   if (!level) return <div>Lesson not found</div>;
 
-  // Guard: Prevent access to locked levels
   if (level.level > nextAvailableLevel)
     return (
       <div className="lesson-page">
@@ -81,7 +85,7 @@ function LessonPage() {
       </div>
     );
 
-  // Levenshtein similarity checker (matches others)
+  // Levenshtein similarity checker
   function calculateSimilarity(a, b) {
     if (!a || !b) return 0;
     const sa = a.trim().toLowerCase();
@@ -113,7 +117,6 @@ function LessonPage() {
     return Math.round(normalized);
   }
 
-  // Check the answer for current micro-lesson and show feedback
   const handleCheck = () => {
     const ml = microLessons[microIdx];
     const answerRaw = ml.content.word || "";
@@ -141,7 +144,6 @@ function LessonPage() {
       return n;
     });
 
-    // Success pop
     if (isCorrect) {
       setSuccessAnim((arr) => {
         const n = [...arr];
@@ -158,7 +160,6 @@ function LessonPage() {
     }
   };
 
-  // Mark lesson as done to enable progression, award XP
   const handlePracticeDone = () => {
     beginLevelPractice(level.level);
     awardXP(10, "lesson_complete");
@@ -166,7 +167,6 @@ function LessonPage() {
     if (level.level === 1) unlockBadge("first_lesson");
   };
 
-  // UI for single micro-lesson at a time
   function renderMicroLesson(ml, idx) {
     return (
       <div
@@ -361,7 +361,6 @@ function LessonPage() {
             ) : null}
           </div>
         )}
-
         {microExplanation[idx] && !microExplanation[idx].startsWith("WHY-") && (
           <div
             style={{

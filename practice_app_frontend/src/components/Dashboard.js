@@ -5,12 +5,12 @@ import Leaderboard from "./Leaderboard";
 import FriendsList from "./FriendsList";
 import "../App.css";
 
-// PUBLIC_INTERFACE
 function Dashboard() {
   const { stats, selectedLanguage, getDueAdaptiveReview, markAdaptiveReviewWordSuccess, removeAdaptiveReviewWord } = useProgress();
   const { xp, dailyStreak, badges, BADGES } = useGamification();
 
   const badgeData = BADGES.filter(b => badges.includes(b.id));
+  // NOTE: reviewWords structure will have to be adapted for multiple targets in future
   const reviewWords = getDueAdaptiveReview ? getDueAdaptiveReview() : [];
 
   // ---- MOCKED DATA ----
@@ -46,10 +46,18 @@ function Dashboard() {
     { username: "sophia", xp: 88 },
   ];
 
+  // Render array of selected languages as comma separated
+  let selectedLangDisplay = "(none)";
+  if (Array.isArray(selectedLanguage)) {
+    selectedLangDisplay = selectedLanguage.map(l => l.label).join(", ");
+  } else if (selectedLanguage?.label) {
+    selectedLangDisplay = selectedLanguage.label;
+  }
+
   return (
     <div className="dashboard-container">
       <h2>Welcome back!</h2>
-      <p>Language: <b>{selectedLanguage?.label || "Choose"}</b></p>
+      <p>Languages: <b>{selectedLangDisplay}</b></p>
       <div className="dashboard-cards">
         <div className="dashboard-card"><b>Level:</b> {stats.level}</div>
         <div className="dashboard-card"><b>Progress:</b>

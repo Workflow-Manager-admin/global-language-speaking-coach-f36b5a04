@@ -16,6 +16,10 @@ const AVAILABLE_LANGUAGES = [
   { code: "pt", label: "Portuguese" },
 ];
 
+/**
+ * LanguageSelector refactored for multi-language selection:
+ * Users may select multiple base and target languages via checkboxes.
+ */
 function LanguageSelector() {
   const {
     baseLanguage,
@@ -24,60 +28,70 @@ function LanguageSelector() {
     setSelectedLanguage,
   } = useProgress();
 
-  // For instant selection UI (before confirmation)
-  const [tempBase, setTempBase] = useState(baseLanguage || { code: "en", label: "English" });
-  const [tempTarget, setTempTarget] = useState(selectedLanguage || { code: "es", label: "Spanish" });
+  // Multi-select: store arrays of language objects
+  const [tempBase, setTempBase] = useState(Array.isArray(baseLanguage) ? baseLanguage : baseLanguage ? [baseLanguage] : []);
+  const [tempTarget, setTempTarget] = useState(Array.isArray(selectedLanguage) ? selectedLanguage : selectedLanguage ? [selectedLanguage] : []);
+
+  function toggleLanguage(selected, arr, setArr) {
+    const found = arr.find(l => l.code === selected.code);
+    if (found) setArr(arr.filter(l => l.code !== selected.code));
+    else setArr([...arr, selected]);
+  }
 
   function handleSave() {
     setBaseLanguage(tempBase);
     setSelectedLanguage(tempTarget);
   }
 
-  // Disallow picking same language for both
-  const showWarning = tempBase.code === tempTarget.code;
+  // Prevent any overlap between base and target languages
+  const overlap = tempBase.some(b => tempTarget.some(t => t.code === b.code));
+  // Disallow saving if any language is selected in both
+  const showWarning = overlap || tempTarget.length === 0 || tempBase.length === 0;
 
   return (
     <div className="language-selector-page">
       <h2>Select Your Languages</h2>
       <div style={{ marginBottom: 18 }}>
         <div>
-          <b>Language I speak:</b>
+          <b>Language(s) I speak:</b>
         </div>
         <div className="language-list" style={{ marginBottom: 8 }}>
           {AVAILABLE_LANGUAGES.map((lang) => (
-            <button
-              key={"base-" + lang.code}
-              className={`btn ${lang.code === tempBase.code ? "selected" : ""}`}
-              style={{ minWidth: 85 }}
-              onClick={() => setTempBase(lang)}
-            >
+            <label key={"base-" + lang.code} style={{ minWidth: 90, display: "inline-flex", alignItems: "center", fontWeight: 500 }}>
+              <input
+                type="checkbox"
+                checked={!!tempBase.find(l => l.code === lang.code)}
+                onChange={() => toggleLanguage(lang, tempBase, setTempBase)}
+                style={{ marginRight: 5 }}
+              />
               {lang.label}
-            </button>
+            </label>
           ))}
         </div>
       </div>
       <div style={{ marginBottom: 18 }}>
         <div>
-          <b>Language I want to learn:</b>
+          <b>Language(s) I want to learn:</b>
         </div>
         <div className="language-list">
           {AVAILABLE_LANGUAGES
-            .filter((lang) => lang.code !== tempBase.code) // cannot pick same
             .map((lang) => (
-              <button
-                key={"target-" + lang.code}
-                className={`btn ${lang.code === tempTarget.code ? "selected" : ""}`}
-                style={{ minWidth: 85 }}
-                onClick={() => setTempTarget(lang)}
-              >
+              <label key={"target-" + lang.code} style={{ minWidth: 90, display: "inline-flex", alignItems: "center", fontWeight: 500 }}>
+                <input
+                  type="checkbox"
+                  checked={!!tempTarget.find(l => l.code === lang.code)}
+                  onChange={() => toggleLanguage(lang, tempTarget, setTempTarget)}
+                  disabled={!!tempBase.find(b => b.code === lang.code)}
+                  style={{ marginRight: 5 }}
+                />
                 {lang.label}
-              </button>
+              </label>
             ))}
         </div>
       </div>
       {showWarning && (
         <div style={{ color: "#e87a41", margin: "9px 0", fontWeight: 600 }}>
-          Please select two distinct languages.
+          Please select at least one language each for base and target, with no overlaps.
         </div>
       )}
       <button
@@ -89,10 +103,13 @@ function LanguageSelector() {
         Save Languages
       </button>
       <div style={{ marginTop: 18, fontSize: "1rem", color: "var(--primary-color)" }}>
-        <b>Selected:</b> {tempBase.label} → {tempTarget.label}
+        <b>Selected Bases:</b> {tempBase.length ? tempBase.map(l => l.label).join(", ") : "(none)"}
+        <br />
+        <b>Selected Targets:</b> {tempTarget.length ? tempTarget.map(l => l.label).join(", ") : "(none)"}
       </div>
       <div style={{ marginTop: 5, color: "var(--text-secondary)", fontSize: "0.98rem" }}>
-        Words will be shown in <b>{tempTarget.label}</b> with their meaning in <b>{tempBase.label}</b>.
+        Words will be shown in your selected <b>target</b> languages with meanings in your <b>base</b> languages.<br />
+        (You may add or remove multiple languages at any time.)
       </div>
     </div>
   );

@@ -66,9 +66,10 @@ function ConversationPage() {
   const navigate = useNavigate();
   const lesson = lessons.find(l => String(l.level) === String(levelId));
 
-  // Language for TTS/Speech recognition (use lesson language)
+  // Language for TTS/Speech recognition: use first selected or fallback
+  const realSelectedLang = Array.isArray(selectedLanguage) ? selectedLanguage[0] : selectedLanguage;
   const languageCode =
-    selectedLanguage?.code ||
+    realSelectedLang?.code ||
     "en";
   const languageBCP47Map = {
     en: "en-US",

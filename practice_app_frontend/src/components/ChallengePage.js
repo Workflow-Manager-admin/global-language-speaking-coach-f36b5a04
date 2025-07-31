@@ -23,6 +23,10 @@ function ChallengePage() {
     baseLanguage,
   } = useProgress();
 
+  // Use first selected/base for multi-language support for now
+  const realSelectedLang = Array.isArray(selectedLanguage) ? selectedLanguage[0] : selectedLanguage;
+  const realBaseLang = Array.isArray(baseLanguage) ? baseLanguage[0] : baseLanguage;
+
   const levelIdx = levels.findIndex((l) => String(l.level) === String(levelId));
   const level = levels[levelIdx];
   const navigate = useNavigate();
@@ -42,7 +46,7 @@ function ChallengePage() {
     ko: "ko-KR",
     pt: "pt-PT",
   };
-  const languageCode = selectedLanguage?.code || "en";
+  const languageCode = realSelectedLang?.code || "en";
   const speechLang = languageBCP47Map[languageCode] || languageCode;
 
   // For multi-word sequential challenge
@@ -106,7 +110,7 @@ function ChallengePage() {
   const handleSpeakPrompt = () => {
     const promptEntry = level.words[currentIdx];
     if (!promptEntry) return;
-    const baseLangCode = baseLanguage?.code || "en";
+    const baseLangCode = realBaseLang?.code || "en";
     const bcp47BaseMap = {
       en: "en-US",
       es: "es-ES",

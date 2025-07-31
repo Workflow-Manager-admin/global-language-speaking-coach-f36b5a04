@@ -147,104 +147,152 @@ function createLevelDataForLanguageWithTranslations(targetLanguageCode, baseLang
 const ProgressContext = createContext();
 
 export function ProgressProvider({ children }) {
-  // Known ('base') language selection
-  const defaultBaseLanguage = JSON.parse(localStorage.getItem("baseLanguage")) || { code: "en", label: "English" };
-  const defaultTargetLanguage = JSON.parse(localStorage.getItem("selectedLanguage")) || { code: "es", label: "Spanish" };
+  // Multi-language: selected languages can be an array of {code, label}
+  const rawBase = JSON.parse(localStorage.getItem("baseLanguage"));
+  const rawTarget = JSON.parse(localStorage.getItem("selectedLanguage"));
 
-  const [baseLanguage, setBaseLanguage] = useState(defaultBaseLanguage);
-  const [selectedLanguage, setSelectedLanguage] = useState(defaultTargetLanguage);
+  // Always store arrays internally now
+  const defaultBaseLanguages = Array.isArray(rawBase)
+    ? rawBase
+    : rawBase
+    ? [rawBase]
+    : [{ code: "en", label: "English" }];
+  const defaultTargetLanguages = Array.isArray(rawTarget)
+    ? rawTarget
+    : rawTarget
+    ? [rawTarget]
+    : [{ code: "es", label: "Spanish" }];
 
-  // Initial levels loaded for (base, target) combination.
+  const [baseLanguage, setBaseLanguage] = useState(defaultBaseLanguages);
+  const [selectedLanguage, setSelectedLanguage] = useState(defaultTargetLanguages);
+
+  // Level state is an object by targetLang, each value is the level sets for that target
   const [levels, setLevels] = useState(() => {
-    const key =
-      baseLanguage && selectedLanguage
-        ? `levels_${baseLanguage.code}_${selectedLanguage.code}`
+    // Build a map: levels[targetLangCode] = levelData (with first base in array)
+    const levelsObj = {};
+    defaultTargetLanguages.forEach(target => {
+      const baseLang = defaultBaseLanguages[0]; // For MVP, use first in list for translations
+      const key = target && baseLang
+        ? `levels_${baseLang.code}_${target.code}`
         : "levels_en_es";
-    const cached = localStorage.getItem(key);
-    if (cached) return JSON.parse(cached);
-    return createLevelDataForLanguageWithTranslations(
-      selectedLanguage?.code || "es",
-      baseLanguage?.code || "en",
-      10
-    );
+      const cached = localStorage.getItem(key);
+      if (cached) levelsObj[target.code] = JSON.parse(cached);
+      else
+        levelsObj[target.code] = createLevelDataForLanguageWithTranslations(
+          target.code, baseLang.code, 10
+        );
+    });
+    return levelsObj;
   });
 
-  // ---- Adaptive Review State ---- //
-  const reviewKey =
-    baseLanguage && selectedLanguage
-      ? `adaptive_review_${baseLanguage.code}_${selectedLanguage.code}`
-      : "adaptive_review_en_es";
+  // Single review queue for each combination
+  const reviewKeys = selectedLanguage.map(t => {
+    const baseLang = baseLanguage[0];
+    return baseLang && t ? `adaptive_review_${baseLang.code}_${t.code}` : "adaptive_review_en_es";
+  });
   const [adaptiveReview, setAdaptiveReview] = useState(() => {
-    const cached = localStorage.getItem(reviewKey);
-    if (cached) return JSON.parse(cached);
-    return []; // [{word, translation, idx, lastWrong, nextReview, interval}]
+    // Map of [target code]: reviewArray
+    const reviews = {};
+    reviewKeys.forEach((rk, idx) => {
+      const cached = localStorage.getItem(rk);
+      reviews[selectedLanguage[idx]?.code] = cached ? JSON.parse(cached) : [];
+    });
+    return reviews;
   });
 
-  // Persist adaptive review queue to localStorage
+  // Persist adaptive review queues
   useEffect(() => {
-    localStorage.setItem(reviewKey, JSON.stringify(adaptiveReview));
-  }, [adaptiveReview, reviewKey]);
+    // Persist per language in selection
+    selectedLanguage.forEach((tgt, idx) => {
+      const baseLang = baseLanguage[0];
+      const reviewKey = baseLang && tgt ? `adaptive_review_${baseLang.code}_${tgt.code}` : "adaptive_review_en_es";
+      localStorage.setItem(reviewKey, JSON.stringify(adaptiveReview[tgt.code] || []));
+    });
+  }, [adaptiveReview, selectedLanguage, baseLanguage]);
 
-  // When levels, base, or target changes, update the correct localStorage keys
+  // Persist levels per combo
   useEffect(() => {
-    const key =
-      baseLanguage && selectedLanguage
-        ? `levels_${baseLanguage.code}_${selectedLanguage.code}`
-        : "levels_en_es";
-    localStorage.setItem(key, JSON.stringify(levels));
-  }, [levels, baseLanguage, selectedLanguage]);
+    Object.keys(levels).forEach(code => {
+      const baseLang = baseLanguage[0];
+      const key = baseLang && code ? `levels_${baseLang.code}_${code}` : "levels_en_es";
+      localStorage.setItem(key, JSON.stringify(levels[code]));
+    });
+  }, [levels, baseLanguage]);
+
   useEffect(() => {
     localStorage.setItem("selectedLanguage", JSON.stringify(selectedLanguage));
   }, [selectedLanguage]);
   useEffect(() => {
     localStorage.setItem("baseLanguage", JSON.stringify(baseLanguage));
   }, [baseLanguage]);
-  useEffect(() => {
-    // Clear trouble words if language changes
-    setAdaptiveReview([]);
-    // eslint-disable-next-line
-  }, [baseLanguage?.code, selectedLanguage?.code]);
 
-  // When user switches the base or study language, reset (or load) the appropriate level data
-  function handleSetSelectedLanguage(langObj) {
-    setSelectedLanguage(langObj);
-    // Try to load or create for (baseLanguage, langObj)
-    const key =
-      baseLanguage && langObj
-        ? `levels_${baseLanguage.code}_${langObj.code}`
-        : "levels_en_es";
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      setLevels(JSON.parse(cached));
-    } else {
-      setLevels(createLevelDataForLanguageWithTranslations(
-        langObj.code,
-        baseLanguage?.code || "en",
-        10
-      ));
-    }
-    // also reset review words
-    setAdaptiveReview([]);
+  useEffect(() => {
+    // Clear all trouble words if language changes
+    const nextAdaptive = {};
+    selectedLanguage.forEach(tgt => {
+      nextAdaptive[tgt.code] = [];
+    });
+    setAdaptiveReview(nextAdaptive);
+    // eslint-disable-next-line
+  }, [JSON.stringify(baseLanguage.map(l => l.code)), JSON.stringify(selectedLanguage.map(l => l.code))]);
+
+  // When user switches base or target languages
+  function handleSetSelectedLanguage(langArr) {
+    // langArr is an array [{code, label}, ...]
+    setSelectedLanguage([...langArr]);
+    const baseLang = baseLanguage[0];
+    const nextLevels = { ...levels };
+    langArr.forEach(langObj => {
+      const key = baseLang && langObj ? `levels_${baseLang.code}_${langObj.code}` : "levels_en_es";
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        nextLevels[langObj.code] = JSON.parse(cached);
+      } else {
+        nextLevels[langObj.code] = createLevelDataForLanguageWithTranslations(
+          langObj.code,
+          baseLang?.code || "en",
+          10
+        );
+      }
+    });
+    // Remove any targets not in new selection
+    Object.keys(nextLevels).forEach(code => {
+      if (!langArr.find(l => l.code === code)) delete nextLevels[code];
+    });
+    setLevels(nextLevels);
+
+    // reset review words
+    const nextAdaptive = {};
+    langArr.forEach(tgt => {
+      nextAdaptive[tgt.code] = [];
+    });
+    setAdaptiveReview(nextAdaptive);
   }
-  function handleSetBaseLanguage(langObj) {
-    setBaseLanguage(langObj);
-    // Try to load or create for (langObj, selectedLanguage)
-    const key =
-      langObj && selectedLanguage
-        ? `levels_${langObj.code}_${selectedLanguage.code}`
-        : "levels_en_es";
-    const cached = localStorage.getItem(key);
-    if (cached) {
-      setLevels(JSON.parse(cached));
-    } else {
-      setLevels(createLevelDataForLanguageWithTranslations(
-        selectedLanguage?.code || "es",
-        langObj.code,
-        10
-      ));
-    }
-    // also reset review words
-    setAdaptiveReview([]);
+  function handleSetBaseLanguage(langArr) {
+    setBaseLanguage([...langArr]);
+    const baseLang = langArr[0];
+    const nextLevels = { ...levels };
+    selectedLanguage.forEach(langObj => {
+      const key = baseLang && langObj ? `levels_${baseLang.code}_${langObj.code}` : "levels_en_es";
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        nextLevels[langObj.code] = JSON.parse(cached);
+      } else {
+        nextLevels[langObj.code] = createLevelDataForLanguageWithTranslations(
+          langObj.code,
+          baseLang?.code || "en",
+          10
+        );
+      }
+    });
+    setLevels(nextLevels);
+
+    // reset review words
+    const nextAdaptive = {};
+    selectedLanguage.forEach(tgt => {
+      nextAdaptive[tgt.code] = [];
+    });
+    setAdaptiveReview(nextAdaptive);
   }
 
   // --- Skill Tree Prerequisite State ---
