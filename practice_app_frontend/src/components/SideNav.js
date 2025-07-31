@@ -1,13 +1,12 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 import "../App.css";
 
 // PUBLIC_INTERFACE
+/**
+ * SideNav is now always visible since there is no authentication gating.
+ */
 function SideNav() {
-  const { user } = useAuth();
-  if (!user) return null;
-
   return (
     <nav className="sidenav">
       <NavLink to="/dashboard" className={({isActive}) => isActive ? "active" : ""}>🏠 Dashboard</NavLink>
