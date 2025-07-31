@@ -1,7 +1,6 @@
 import React from "react";
 import { useProgress } from "../context/ProgressContext";
 import { useGamification } from "../context/GamificationContext";
-import FriendsList from "./FriendsList";
 import "../App.css";
 
 // PUBLIC_INTERFACE
@@ -14,11 +13,6 @@ function Dashboard() {
 
   // ---- MOCKED DATA ----
   // Leaderboard removed
-  const friendsList = [
-    { username: "minerva", xp: 295 },
-    { username: "marco", xp: 155 },
-    { username: "sophia", xp: 88 },
-  ];
 
   return (
     <div className="dashboard-container">
@@ -58,15 +52,6 @@ function Dashboard() {
             {badge.label}
           </span>
         ))}
-      </div>
-      {/* ---- Friends UI ---- */}
-      <div style={{
-        display: "flex",
-        gap: 32,
-        marginTop: 30,
-        flexWrap: "wrap"
-      }}>
-        <FriendsList friends={friendsList} />
       </div>
       {/* ---- Adaptive Review Section ---- */}
       {reviewWords.length > 0 && (
