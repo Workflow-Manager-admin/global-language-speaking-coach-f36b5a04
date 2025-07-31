@@ -1,7 +1,6 @@
 import React from "react";
 import { useProgress } from "../context/ProgressContext";
 import { useGamification } from "../context/GamificationContext";
-import Leaderboard from "./Leaderboard";
 import FriendsList from "./FriendsList";
 import "../App.css";
 
@@ -14,32 +13,7 @@ function Dashboard() {
   const reviewWords = getDueAdaptiveReview ? getDueAdaptiveReview() : [];
 
   // ---- MOCKED DATA ----
-  let currentUser = null;
-  if (typeof window !== "undefined" && localStorage.getItem("user")) {
-    try {
-      currentUser = JSON.parse(localStorage.getItem("user"));
-    } catch {}
-  }
-  const leaderboardEntries = [
-    { username: "polyglot_anne", xp: 440, streak: 15 },
-    { username: "linguist_lee", xp: 330, streak: 7 },
-    { username: currentUser?.username || "You", xp, streak: dailyStreak, isCurrentUser: true },
-    { username: "minerva", xp: 295, streak: 5 },
-    { username: "marco", xp: 155, streak: 2 },
-  ];
-  if (
-    currentUser &&
-    !leaderboardEntries.some(
-      entry => entry.username === currentUser.username
-    )
-  ) {
-    leaderboardEntries.push({
-      username: currentUser.username,
-      xp,
-      streak: dailyStreak,
-      isCurrentUser: true,
-    });
-  }
+  // Leaderboard removed
   const friendsList = [
     { username: "minerva", xp: 295 },
     { username: "marco", xp: 155 },
@@ -85,14 +59,13 @@ function Dashboard() {
           </span>
         ))}
       </div>
-      {/* ---- NEW: Leaderboard and Friends UI ---- */}
+      {/* ---- Friends UI ---- */}
       <div style={{
         display: "flex",
         gap: 32,
         marginTop: 30,
         flexWrap: "wrap"
       }}>
-        <Leaderboard data={leaderboardEntries} />
         <FriendsList friends={friendsList} />
       </div>
       {/* ---- Adaptive Review Section ---- */}

@@ -13,6 +13,7 @@ import Header from "./components/Header";
 import SideNav from "./components/SideNav";
 import SkillTree from "./components/SkillTree";
 import HowDoYouSayTool from "./components/HowDoYouSayTool";
+// Leaderboard import removed
 
 import { ProgressProvider } from "./context/ProgressContext";
 import { GamificationProvider } from "./context/GamificationContext";
