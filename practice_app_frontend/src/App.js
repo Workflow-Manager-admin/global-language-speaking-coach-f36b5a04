@@ -12,7 +12,6 @@ import ProgressPage from "./components/ProgressPage";
 import Header from "./components/Header";
 import SideNav from "./components/SideNav";
 import SkillTree from "./components/SkillTree";
-import HowDoYouSayTool from "./components/HowDoYouSayTool";
 // Leaderboard import removed
 
 import { ProgressProvider } from "./context/ProgressContext";
@@ -46,14 +45,7 @@ function App() {
             <div className="main-layout">
               <SideNav />
               <main className="main-content">
-                {/* HowDoYouSayTool (hidden in tests/challenges) */}
-                {(() => {
-                  // Route-aware hiding: Check window.location
-                  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
-                  return !/^\/challenge\/\d+/.test(pathname) ? (
-                    <HowDoYouSayTool hidden={/^\/challenge\/\d+/.test(pathname)} />
-                  ) : null;
-                })()}
+                
                 <Routes>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/language" element={<LanguageSelector />} />
