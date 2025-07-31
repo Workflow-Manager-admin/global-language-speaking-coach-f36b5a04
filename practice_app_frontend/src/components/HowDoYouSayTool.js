@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useProgress } from "../context/ProgressContext";
 
 /**
- * HowDoYouSayTool - Now allows translation of any full sentence, phrase, or word using a public web API (with fallback).
+ * HowDoYouSayTool - Now allows translation of any full sentence, phrase, or word using Google Translate API (with fallback).
  * Translates whole input, provides feedback for multi-word/sentence attempts, and ensures TTS plays the complete result.
  * 
  * PUBLIC_INTERFACE
@@ -39,7 +39,6 @@ function HowDoYouSayTool({ hidden }) {
         spoken: baseWords[idx] || ""
       };
     }
-
     // No internal splitting or partial translation at all
     return {
       translation: "(No translation found)",
@@ -63,11 +62,17 @@ function HowDoYouSayTool({ hidden }) {
   };
 
   /**
-   * Make an actual online API call to LibreTranslate's CORS-ready API.
-   * Sends full phrase/sentence for translation.
+   * Make an actual online API call to Google Translate API.
+   * Expects REACT_APP_GOOGLE_TRANSLATE_API_KEY to be configured.
+   * The fetches are made directly for demonstration. For production, use a backend proxy to avoid exposing API key!
    */
   async function fetchOnlineTranslation(inputText, from, to) {
-    const apiUrl = "https://libretranslate.com/translate";
+    const GOOGLE_API_KEY = process.env.REACT_APP_GOOGLE_TRANSLATE_API_KEY;
+    if (!GOOGLE_API_KEY) {
+      setError("Translation unavailable: Google Translate API key not configured.");
+      return null;
+    }
+    const apiUrl = `https://translation.googleapis.com/language/translate/v2?key=${GOOGLE_API_KEY}`;
     try {
       const resp = await fetch(apiUrl, {
         method: "POST",
@@ -81,17 +86,17 @@ function HowDoYouSayTool({ hidden }) {
       });
       const data = await resp.json();
       if (
-        typeof data.translatedText === "string" &&
-        data.translatedText.trim() &&
-        // Accept even if identical (for phrase fallback, API might echo input)
-        (data.translatedText.trim() !== "" || inputText.trim().length > 1)
+        data &&
+        data.data &&
+        data.data.translations &&
+        Array.isArray(data.data.translations) &&
+        data.data.translations.length > 0 &&
+        typeof data.data.translations[0].translatedText === "string"
       ) {
-        return data.translatedText;
+        return data.data.translations[0].translatedText;
       }
-      // Could not translate, fallback
       return null;
     } catch (err) {
-      // Network, CORS, or other error.
       return null;
     }
   }
@@ -348,7 +353,7 @@ function HowDoYouSayTool({ hidden }) {
       >
         You can translate any word, phrase, or full sentence (not just those in your lesson).<br />
         The entire text you enter is translated as a complete phrase—no splitting or partial translation.<br />
-        Online translation uses a public API when available.
+        Online translation uses Google Translate API when available.
         <span style={{ color: "#e87a41" }}>
           {" "}
           (Results may vary. Full-phrase and sentence translations are supported!)
