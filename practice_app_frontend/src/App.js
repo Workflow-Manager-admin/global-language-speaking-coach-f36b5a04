@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-d
 import "./App.css";
 import "./index.css";
 
-import AuthPage from "./components/AuthPage";
 import Dashboard from "./components/Dashboard";
 import LanguageSelector from "./components/LanguageSelector";
 import LessonPage from "./components/LessonPage";
@@ -15,7 +14,6 @@ import SideNav from "./components/SideNav";
 import SkillTree from "./components/SkillTree";
 import HowDoYouSayTool from "./components/HowDoYouSayTool";
 
-import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ProgressProvider } from "./context/ProgressContext";
 import { GamificationProvider } from "./context/GamificationContext";
 
@@ -39,55 +37,39 @@ function App() {
   }, [theme]);
 
   return (
-    <AuthProvider>
-      <GamificationProvider>
-        <ProgressProvider>
-          <Router>
-            <div className="app-root">
-              <Header />
-              <div className="main-layout">
-                <SideNav />
-                <main className="main-content">
-                  {/* HowDoYouSayTool (hidden in tests/challenges) */}
-                  {(() => {
-                    // Route-aware hiding: Check window.location
-                    const pathname = typeof window !== "undefined" ? window.location.pathname : "";
-                    const isTestMode =
-                      /^\/challenge\/\d+/.test(pathname) ||
-                      /^\/lesson\/\d+/.test(pathname) || // lesson: allow by default, but can fine-tune
-                      /^\/conversation\/\d+/.test(pathname);
-                    return !/^\/challenge\/\d+/.test(pathname) ? (
-                      <HowDoYouSayTool hidden={/^\/challenge\/\d+/.test(pathname)} />
-                    ) : null;
-                  })()}
-                  <Routes>
-                    <Route path="/login" element={<AuthPage />} />
-                    <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
-                    <Route path="/language" element={<RequireAuth><LanguageSelector /></RequireAuth>} />
-                    <Route path="/skilltree" element={<RequireAuth><SkillTree /></RequireAuth>} />
-                    <Route path="/lesson/:levelId" element={<RequireAuth><LessonPage /></RequireAuth>} />
-                    <Route path="/conversation/:levelId" element={<RequireAuth><ConversationPage /></RequireAuth>} />
-                    <Route path="/challenge/:levelId" element={<RequireAuth><ChallengePage /></RequireAuth>} />
-                    <Route path="/progress" element={<RequireAuth><ProgressPage /></RequireAuth>} />
-                    <Route path="*" element={<Navigate replace to="/dashboard" />} />
-                  </Routes>
-                </main>
-              </div>
+    <GamificationProvider>
+      <ProgressProvider>
+        <Router>
+          <div className="app-root">
+            <Header />
+            <div className="main-layout">
+              <SideNav />
+              <main className="main-content">
+                {/* HowDoYouSayTool (hidden in tests/challenges) */}
+                {(() => {
+                  // Route-aware hiding: Check window.location
+                  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+                  return !/^\/challenge\/\d+/.test(pathname) ? (
+                    <HowDoYouSayTool hidden={/^\/challenge\/\d+/.test(pathname)} />
+                  ) : null;
+                })()}
+                <Routes>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/language" element={<LanguageSelector />} />
+                  <Route path="/skilltree" element={<SkillTree />} />
+                  <Route path="/lesson/:levelId" element={<LessonPage />} />
+                  <Route path="/conversation/:levelId" element={<ConversationPage />} />
+                  <Route path="/challenge/:levelId" element={<ChallengePage />} />
+                  <Route path="/progress" element={<ProgressPage />} />
+                  <Route path="*" element={<Navigate replace to="/dashboard" />} />
+                </Routes>
+              </main>
             </div>
-          </Router>
-        </ProgressProvider>
-      </GamificationProvider>
-    </AuthProvider>
+          </div>
+        </Router>
+      </ProgressProvider>
+    </GamificationProvider>
   );
-}
-
-// PUBLIC_INTERFACE
-function RequireAuth({ children }) {
-  const { user } = useAuth();
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  return children;
 }
 
 export default App;

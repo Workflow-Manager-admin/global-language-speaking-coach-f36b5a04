@@ -1,13 +1,10 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
 import "../App.css";
 
 // PUBLIC_INTERFACE
 function SideNav() {
-  const { user } = useAuth();
-  if (!user) return null;
-
+  // Unconditionally show navigation, authentication removed.
   return (
     <nav className="sidenav">
       <NavLink to="/dashboard" className={({isActive}) => isActive ? "active" : ""}>🏠 Dashboard</NavLink>
